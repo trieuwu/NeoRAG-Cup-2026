@@ -41,6 +41,7 @@ Retrieval train E1: 72.2 (baseline) → 85.7. String Presence 71.8 → 84.7. ROU
 | R8 | HyDE: Haiku viết câu trả lời giả định rồi embed | diễn đạt khác | +1 lời gọi/câu | thấp | 🧪 |
 | R9 | Tinh chỉnh trọng số RRF, depth, rrf_k bằng `python -m solution bench` | tổng | 0 | thấp | 🔜 (cẩn thận overfit train) |
 | R10 | Mở rộng từ điển viết tắt/đồng nghĩa (ví dụ "lên clb" → "sinh hoạt") | không dấu | 0 | thấp | 🧪 |
+| R11 | Mở rộng tập ứng viên rerank (pool 30, chọn tối đa 10, anchors chỉ thêm ứng viên) | Recall@5 | +token rerank | thấp | ⛔ E8: stress +0.2/+0.4 (cần +1); pool 20 đã chứa 98% đoạn đúng |
 
 Lưu ý: metric tính tại k=5 nhưng nộp đủ 10 id không bị phạt (Precision không vào điểm). Thứ tự top-5 là quan trọng nhất.
 
@@ -55,6 +56,7 @@ Lưu ý: metric tính tại k=5 nhưng nộp đủ 10 id không bị phạt (Pre
 | G5 | Tự kiểm (Haiku đọc lại câu trả lời + tài liệu, xóa câu không có căn cứ) | Groundedness, Noise | +1 lời gọi/câu | trung bình | 🧪 |
 | G6 | Phân tích `per_query.jsonl` sau mỗi lần chấm judge: tìm câu Noise cao, sửa prompt theo nhóm | tổng | 0 | thấp | ✅ E5 (chẩn đoán Relevancy, Query Rewriter) |
 | G7 | Trả lời theo từng câu hỏi con rồi gộp | so sánh, nhiều đoạn | +lời gọi | cao | ⛔ (đắt, dài dòng) |
+| G8 | Prompt v7 theo khuôn câu đáp án chuẩn ("Theo ...", `;`, nêu phần có khi thiếu dữ liệu) và/hoặc few-shot động style-only | ROUGE-L, SP | 0 | thấp | ⛔ E9 (nhánh `perf/van-phong-tra-loi`): ROUGE +2.1, SP +3.6 nhưng Groundedness −2, Abstention/Relevancy giảm với v7; tổng train ±0.6 → giữ E7 |
 
 Cấm: chèn chỉ dẫn hay nhãn chấm vào câu trả lời nhằm tác động judge.
 
@@ -103,6 +105,9 @@ Chuẩn bị hỏi đáp: vì sao RRF thay vì cộng điểm; vì sao bỏ dấ
 cách tránh overfit train; xử lý câu không có đáp án; vì sao không chunking.
 
 ## 7. Lịch đề xuất
+
+**Cập nhật 04/11:** Giai đoạn A (E8, E9) không tìm được cải tiến vượt tiêu chí → chốt E7 cho Private. Tiếp theo:
+Giai đoạn B (đóng băng cấu hình, script chạy một lệnh, chống lỗi, diễn tập) rồi Giai đoạn C (README, kiến trúc, API chatbot).
 
 | Ngày | Việc |
 |---|---|
