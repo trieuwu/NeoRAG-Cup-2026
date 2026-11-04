@@ -18,6 +18,30 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 | Run ID | Commit SHA | Mô tả phương pháp (Retrieval / Generation) | Recall@5 | MRR@5 | NDCG@5 | Score Train | Public Score | Cost ($) | Ghi chú rút ra |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | 78.21 | 69.25 | 69.10 | **73.61** (Retrieval 72.19 · Generation 75.04) | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Retrieval train 72 nhưng Public chỉ 42: đề Public khó hơn nhiều |
+| E1 | `00472e3` | **Hybrid + rewrite + prompt v2.** R: Haiku viết lại câu hỏi (thêm dấu, mở rộng viết tắt, nhận diện CLB, tách câu hỏi con) → BM25 bỏ dấu + dense bge-m3, gộp RRF, ưu tiên đúng CLB. G: prompt v2 (ngắn, chép nguyên số liệu, từ chối chuẩn), top-5 đoạn kèm [CLB \| chủ đề] | 91.33 | 83.57 | 82.11 | (nj) Retrieval **85.67** · SP 84.71 · ROUGE-L 57.36 | — | — | Retrieval +13.5, SP +12.9, ROUGE-L +15.4 so với E0. 2 lời gọi Haiku/câu. Chưa chấm judge, chưa nộp Public |
+
+### Ablation retrieval E1 (`python -m solution bench`, train, 122 câu có doc đúng)
+
+Mỗi dòng bỏ hoặc chỉ giữ một thành phần so với `full`. Đo trên commit `00472e3`.
+
+| Cấu hình | Recall@5 | MRR@5 | NDCG@5 | Retrieval |
+|---|---:|---:|---:|---:|
+| dense only, không rewrite (≈ baseline) | 76.50 | 68.16 | 68.09 | 70.91 |
+| BM25 only, không rewrite | 80.40 | 76.97 | 72.97 | 76.78 |
+| hybrid, không rewrite | 86.27 | 78.52 | 77.08 | 80.63 |
+| dense only + rewrite | 82.86 | 76.15 | 75.06 | 78.02 |
+| BM25 only + rewrite | 85.45 | 78.92 | 76.64 | 80.34 |
+| full, không club boost | 89.14 | 81.23 | 79.67 | 83.35 |
+| full (w_dense_original = 0.5) | 89.28 | 82.05 | 80.24 | 83.85 |
+| **full (w_dense_original = 0.2, mặc định E1)** | **91.33** | **83.57** | **82.11** | **85.67** |
+
+Rút ra:
+- **BM25 trên văn bản bỏ dấu một mình đã hơn dense** (+5.9): câu hỏi không dấu khớp từ khóa tốt hơn embedding.
+- **Hybrid > từng thành phần** (+3.9 so với BM25): hai tín hiệu bổ sung cho nhau.
+- **Rewrite đóng góp +3 trên hybrid**; với dense riêng là +7.1.
+- **Club boost tác dụng nhỏ** (+0.5); boost 0.5–3 cho kết quả gần như nhau.
+- Giảm trọng số dense cho câu gốc không dấu 0.5 → 0.2: +1.8. Các giá trị 0–0.3 chênh nhau ≤ 1 câu (nhiễu); chọn 0.2 để không overfit.
+- Nhóm không dấu/viết tắt: Recall@5 0.44 → 0.85.
 
 ## Ghi chú phân tích lỗi
 
