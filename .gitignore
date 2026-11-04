@@ -28,3 +28,14 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Vector database & Local cache mô hình
+chroma_db/
+faiss_index/
+models_cache/
+
+# Claude Code / Anthropic
+# Dùng ".claude/*" (không phải ".claude/") để dòng ngoại lệ bên dưới có hiệu lực:
+# git không xét ngoại lệ bên trong một thư mục đã bị bỏ qua toàn bộ.
+.claude/*
+!.claude/commands/
