@@ -34,6 +34,9 @@ ABLATIONS: dict[str, dict] = {
     "full+diversify": {"diversify_clubs": True},
     "full+rerank": {"use_rerank": True},
     "full+rerank+diversify": {"use_rerank": True, "diversify_clubs": True},
+    # E4
+    "diversify_off": {"diversify_clubs": False},
+    "diversify+intro": {"diversify_prefer_intro": True},
 }
 
 

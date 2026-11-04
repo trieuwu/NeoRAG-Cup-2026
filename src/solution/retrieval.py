@@ -33,6 +33,7 @@ class RetrievalConfig:
     rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
     w_rerank: float = 2.0  # trọng số danh sách xếp hạng của cross-encoder khi gộp RRF lần hai
     diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
+    diversify_prefer_intro: bool = False  # đại diện của mỗi CLB là đoạn "Giới thiệu chung" nếu có
 
 
 def doc_repr(d: Document, metadata: bool = True) -> str:
@@ -111,29 +112,43 @@ class HybridRetriever:
         return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
 
     def _diversify(self, plan: QueryPlan, ranked: list[int], k: int = 5) -> list[int]:
-        """Câu hỏi về >= 2 CLB: đưa đoạn tốt nhất của CLB còn thiếu vào top-k."""
+        """Câu hỏi về >= 2 CLB: mỗi CLB có một đoạn đại diện trong top-k.
+
+        Đại diện = đoạn xếp hạng cao nhất của CLB đó, hoặc đoạn "Giới thiệu chung" của CLB nếu bật
+        diversify_prefer_intro (câu so sánh thường cần thông tin tổng quan: ngày thành lập, lĩnh vực).
+        Đoạn bị thay là đoạn thấp nhất trong top-k không phải đại diện, ưu tiên đoạn của CLB không được
+        hỏi (vd. đoạn chung của S2B) rồi tới đoạn của CLB đang có nhiều hơn một đoạn.
+        """
         clubs = [CLUBS[c] for c in plan.clubs if c != "s2b"]
         if len(clubs) < 2:
             return ranked
-        top = ranked[:k]
+        prefer_intro = self.config.diversify_prefer_intro
+        top, protected = ranked[:k], set()
         for club in clubs:
-            if any(self.docs[i].club == club for i in top):
+            members = [i for i in ranked if self.docs[i].club == club]
+            if not members:
                 continue
-            best = next((i for i in ranked[k:] if self.docs[i].club == club), None)
-            if best is None:
+            rep = members[0]
+            if prefer_intro:
+                rep = next((i for i in members if self.docs[i].topic == "Giới thiệu chung"), rep)
+            elif any(i in top for i in members):
+                rep = next(i for i in top if i in members)
+            if rep in top:
+                protected.add(rep)
                 continue
-            # thay đoạn cuối top-k thuộc CLB đã có nhiều hơn 1 đoạn
             counts = {c: sum(self.docs[i].club == c for i in top) for c in clubs}
             victim = next(
                 (
                     i
                     for i in reversed(top)
-                    if counts.get(self.docs[i].club, 0) > 1 or self.docs[i].club not in clubs
+                    if i not in protected
+                    and (self.docs[i].club not in clubs or counts[self.docs[i].club] > 1)
                 ),
                 None,
             )
             if victim is None:
                 continue
-            top[top.index(victim)] = best
+            top[top.index(victim)] = rep
+            protected.add(rep)
         rest = [i for i in ranked if i not in top]
         return top + rest
