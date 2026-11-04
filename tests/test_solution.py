@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from conftest import FakeEmbedder, FakeLLM
 from solution.bm25 import BM25
 from solution.pipeline import PipelineConfig, SolutionPipeline
@@ -50,7 +52,9 @@ def test_parse_plan_falls_back_to_original_on_bad_json():
 
 def _pipeline(corpus, responder) -> tuple[SolutionPipeline, FakeLLM]:
     llm = FakeLLM(responder)
-    pipe = SolutionPipeline(PipelineConfig(), llm=llm)
+    pipe = SolutionPipeline(
+        PipelineConfig(dynamic_few_shot=False), llm=llm
+    )  # few-shot động có test riêng
     pipe.retriever.embedder = FakeEmbedder()
     pipe.index(corpus)
     return pipe, llm
@@ -192,3 +196,44 @@ def test_v5_prompt_extends_v4(corpus):
     assert ANSWER_SYSTEM_V5.startswith(ANSWER_SYSTEM_V4.split("8.")[0])
     assert "KHÔNG hỏi" in ANSWER_SYSTEM_V5
     assert answer_messages("q", "q", corpus, "v5")[0]["content"] == ANSWER_SYSTEM_V5
+
+
+def test_anchor_doc_score_is_max_over_doc_questions():
+    import numpy as np
+
+    from solution.retrieval import HybridRetriever
+
+    r = HybridRetriever(FakeEmbedder())
+    r.docs = [object(), object()]
+    r.anchor_vectors = np.array([[1.0, 0.0], [0.0, 1.0], [0.6, 0.8]], dtype=np.float32)
+    r.anchor_owner = np.array([0, 0, 1])
+    scores = r._anchor_doc_scores(np.array([0.0, 1.0], dtype=np.float32))
+    assert scores.tolist() == pytest.approx([1.0, 0.8])
+
+
+def test_dynamic_few_shot_leave_one_out(tmp_path):
+    from solution.fewshot import FewShotSelector
+
+    path = tmp_path / "q.jsonl"
+    rows = [
+        {
+            "id": "t1",
+            "query": "CLB Lập Trình PTIT thành lập khi nào?",
+            "answer": "Ngày 09/10/2011.",
+        },
+        {"id": "t2", "query": "ProPTIT ra đời năm nào?", "answer": "Năm 2011."},
+        {"id": "t3", "query": "GCC có mấy nhánh đào tạo?", "answer": "Hai nhánh."},
+    ]
+    path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    sel = FewShotSelector(FakeEmbedder(), k=2, path=path)
+    picked = sel.select(QueryPlan(rows[0]["query"], rows[0]["query"]))
+    assert "t1" not in {e.id for e in picked} and len(picked) == 2
+
+
+def test_v6_prompt_uses_dynamic_examples(corpus):
+    from solution.prompts import ANSWER_SYSTEM_V6, DYNAMIC_INTRO, answer_messages
+
+    msgs = answer_messages("q", "q", corpus, "v6", examples=[("vd hỏi", "vd đáp")])
+    assert msgs[0]["content"] == ANSWER_SYSTEM_V6
+    assert msgs[1]["content"].startswith(DYNAMIC_INTRO) and msgs[2]["content"] == "vd đáp"
+    assert len(msgs) == 4 and "KHÍA CẠNH" in ANSWER_SYSTEM_V6
