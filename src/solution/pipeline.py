@@ -42,7 +42,8 @@ def _apply_env(obj) -> None:
 @dataclass
 class PipelineConfig:
     rewrite: bool = True
-    prompt: str = "v3"  # "v3" (v2 + few-shot) | "v2" | "baseline"
+    rewrite_prompt: str = "v2"  # "v2" (tách câu hỏi con theo từng CLB) | "v1"
+    prompt: str = "v4"  # "v4" (ngắn, nhắc chủ thể, few-shot) | "v3" | "v2" | "baseline"
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
@@ -69,7 +70,7 @@ class SolutionPipeline(RAGPipeline):
         self.llm_model = os.getenv("LLM_MODEL", "claude-haiku-5-5")
         self.llm = llm or LLMClient(cache_path=".cache/solution.sqlite")
         self.embedder = GatewayEmbedder(self.llm, os.getenv("EMBEDDING_MODEL", "bge-m3"))
-        self.rewriter = QueryRewriter(self.llm, self.llm_model)
+        self.rewriter = QueryRewriter(self.llm, self.llm_model, self.config.rewrite_prompt)
         reranker = None
         if self.config.retrieval.use_rerank:
             from solution.rerank import CrossEncoderReranker

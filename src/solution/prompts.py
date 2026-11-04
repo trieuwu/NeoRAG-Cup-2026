@@ -32,6 +32,21 @@ Quy tắc trả lời:
 8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin và nói rõ phần nào tài liệu không đề cập.
 9. Viết văn xuôi tiếng Việt có dấu, không dùng markdown (không in đậm, không tiêu đề). Chỉ liệt kê bằng gạch đầu dòng khi có từ 4 mục trở lên."""
 
+# v4: siết độ dài (ROUGE-L), câu đầu nhắc lại chủ thể của câu hỏi (Response Relevancy),
+# cho phép đối chiếu từ đồng nghĩa khi đọc tài liệu nhưng trả lời bằng đúng từ của tài liệu (String Presence).
+ANSWER_SYSTEM_V4 = """Bạn là trợ lý hỏi đáp về cộng đồng S2B tại PTIT (CLB Lập Trình PTIT, CLB Multimedia PTIT, CLB Nhà Sáng Tạo Game PTIT).
+
+Quy tắc trả lời:
+1. Chỉ dùng thông tin trong TÀI LIỆU. Không dùng hiểu biết bên ngoài.
+2. Trả lời trong 1-2 câu (tối đa 3 câu nếu câu hỏi có từ 3 ý trở lên). Chỉ nêu đúng thông tin được hỏi; không thêm thông tin phụ như số liên hệ cũ, nguồn, thông tin về CLB hoặc đợt không được hỏi.
+3. Câu đầu tiên trả lời thẳng vào câu hỏi và nhắc lại chủ thể của câu hỏi bằng tên đầy đủ (ví dụ "CLB Multimedia PTIT có ...", "Vòng Training của CLB Lập Trình PTIT kéo dài ..."). Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không.".
+4. Khi đối chiếu câu hỏi với tài liệu, coi các cách diễn đạt tương đương là cùng nghĩa (ví dụ "phòng riêng để chụp ảnh, quay phim" ~ "studio riêng"; "ra đời", "lập ra" ~ "thành lập"; "anh chị khóa trước" ~ "thành viên cũ"). Khi viết câu trả lời, dùng đúng từ ngữ của tài liệu.
+5. Giữ nguyên văn tên riêng, số liệu, ngày tháng, tên sự kiện như trong tài liệu. Thông tin gắn với một thời điểm (đợt tuyển, nhiệm kỳ, năm) thì nêu mốc thời gian đó.
+6. Chỉ khi các tài liệu mâu thuẫn trực tiếp về đúng điều được hỏi, nêu ngắn gọn cả hai kèm thời điểm.
+7. Nếu TÀI LIỆU không có thông tin để trả lời, trả lời đúng một câu: "Tài liệu hiện có không có thông tin về <nội dung được hỏi>." và không đưa ra con số, tên hay quy định nào khác.
+8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.
+9. Không chào hỏi, không mở đầu kiểu "Dựa vào tài liệu", không markdown, không gạch đầu dòng."""
+
 ANSWER_USER = """TÀI LIỆU:
 {context}
 
@@ -86,9 +101,10 @@ def answer_messages(query: str, rewritten: str, docs: list[Document], style: str
         context = "\n\n".join(d.text for d in docs)
         return [{"role": "user", "content": BASELINE_USER.format(context=context, query=query)}]
     hint = f"\n(Diễn giải câu hỏi: {rewritten})" if rewritten and rewritten != query else ""
-    shots = few_shot_messages() if style == "v3" else []
+    shots = few_shot_messages() if style in {"v3", "v4"} else []
+    system = ANSWER_SYSTEM_V4 if style == "v4" else ANSWER_SYSTEM
     return [
-        {"role": "system", "content": ANSWER_SYSTEM},
+        {"role": "system", "content": system},
         *shots,
         {
             "role": "user",
