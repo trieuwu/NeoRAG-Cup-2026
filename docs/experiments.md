@@ -20,7 +20,31 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 | E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | 78.21 | 69.25 | 69.10 | **73.61** (Retrieval 72.19 · Generation 75.04) | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Retrieval train 72 nhưng Public chỉ 42: đề Public khó hơn nhiều |
 | E1 | `fefa875` | **Hybrid + rewrite + prompt v2.** R: Haiku viết lại câu hỏi (thêm dấu, mở rộng viết tắt, nhận diện CLB, tách câu hỏi con) → BM25 bỏ dấu + dense bge-m3, gộp RRF, ưu tiên đúng CLB. G: prompt v2 (ngắn, chép nguyên số liệu, từ chối chuẩn), top-5 đoạn kèm [CLB \| chủ đề] | 91.33 | 83.57 | 82.11 | (nj) Retrieval **85.67** · SP 84.71 · ROUGE-L 57.36 | — | — | Retrieval +13.5, SP +12.9, ROUGE-L +15.4 so với E0. 2 lời gọi Haiku/câu. Chưa chấm judge, chưa nộp Public |
 | E2/E3 | `95b085d` | **+ đa dạng hóa CLB + few-shot.** R: như E1, thêm đa dạng hóa theo CLB (câu hỏi nhiều CLB → mỗi CLB ≥ 1 đoạn top-5); cross-encoder có trong code nhưng tắt (chưa đo xong). G: prompt v3 = v2 + 4 ví dụ few-shot từ train | 92.01 | 83.77 | 82.55 | (nj) Retrieval **86.11** · SP 87.32 · ROUGE-L 60.35 | **80.09** | — | Retrieval +0.4, SP +2.6, ROUGE-L +3.0 so với E1 trên train. **Public: Retrieval 82.19 (R@5 81.79 · MRR@5 87.18 · NDCG@5 77.61), Generation 77.98 (SP 85.04 · ROUGE-L 52.96 · Groundedness 92.31 · Relevancy 57.25 · 1−Noise 80.34 · Abstention 100).** +27.7 so với baseline Public, top 7 bảng xếp hạng. Điểm yếu nhất: ROUGE-L, Relevancy; câu trả lời Public trung vị 274 ký tự (đáp án chuẩn ~200) |
-| E4 | `f0f96b3` | **Rewrite v2 + prompt v4.** R: Haiku tách câu hỏi con cho TỪNG CLB khi câu hỏi nhiều CLB; đa dạng hóa viết lại (ưu tiên đoạn "Giới thiệu chung" có trong code nhưng tắt). G: prompt v4 = trả lời 1-2 câu, câu đầu nhắc chủ thể câu hỏi, đối chiếu từ đồng nghĩa nhưng trả lời bằng từ của tài liệu, + few-shot | 94.33 | 85.23 | 84.81 | (nj) Retrieval **88.12** · SP **88.81** · ROUGE-L **63.73** | chưa nộp | — | Retrieval +2.0, SP +1.5, ROUGE-L +3.4 so với E3. Câu trả lời Public trung vị 274 → 216 ký tự. File nộp: `outputs/public_test_submission.zip` (bản E3 giữ ở `public_test_submission_e3_80.09.zip`) |
+| E4 | `f0f96b3` | **Rewrite v2 + prompt v4.** R: Haiku tách câu hỏi con cho TỪNG CLB khi câu hỏi nhiều CLB; đa dạng hóa viết lại (ưu tiên đoạn "Giới thiệu chung" có trong code nhưng tắt). G: prompt v4 = trả lời 1-2 câu, câu đầu nhắc chủ thể câu hỏi, đối chiếu từ đồng nghĩa nhưng trả lời bằng từ của tài liệu, + few-shot | 94.33 | 85.23 | 84.81 | (nj) Retrieval **88.12** · SP **88.81** · ROUGE-L **63.73** · tập con 42 câu có judge: **87.77** | **82.28** | — | Retrieval +2.0, SP +1.5, ROUGE-L +3.4 so với E3 trên train. **Public: Retrieval 82.68 (R@5 82.58 · MRR@5 86.71 · NDCG@5 78.75), Generation 81.89 (SP 83.97 · ROUGE-L 60.87 · Groundedness 96.15 · Relevancy 60.15 · 1−Noise 90.17 · Abstention 100).** So với E3 Public: ROUGE-L +7.9, 1−Noise +9.8, Relevancy +2.9, Retrieval +0.5 |
+| E5 | `381fd46` | **Rewrite v3 + prompt v5.** R: từ điển viết tắt PTIT cho BM25 (có khớp cụm), rewrite v3 phân giải chữ không dấu theo ngữ cảnh (vẽ/về, nhắn/nhận, thi/thì, đứng lớp), không gắn CLB cho câu cấp Học viện, chỉ tách theo CLB khi thật sự so sánh. G: prompt v5 = v4 + không viết câu "tài liệu không có thông tin" cho điều không được hỏi, mỗi câu trả lời trực tiếp một ý, dùng tên gọi của người hỏi | 93.51 | 85.61 | 84.84 | (nj) Retrieval 87.99 · SP **89.32** · ROUGE-L **64.23** · tập con 42 câu có judge: **89.03** | chưa nộp | — | Tập con có judge so với E4: +1.26 (Relevancy 63.87 → 64.70, Groundedness 91.25 → 97.50, Noise 10.0 → 5.0, ROUGE-L 65.27 → 66.13, SP 89.50 → 90.75). Retrieval train −0.13 (ngang, 4 câu tốt lên / 4 câu kém đi do diễn đạt). File nộp: `outputs/public_test_submission.zip` (E4 giữ ở `public_test_submission_e4_82.28.zip`) |
+
+### Chẩn đoán Response Relevancy (tập con 42 câu train, có judge)
+
+Relevancy = cosine bge-m3 giữa **câu hỏi gốc** và 3 câu hỏi judge sinh ngược từ câu trả lời.
+
+| Nhóm | Relevancy chính thức | Nếu so với câu hỏi đã viết lại (có dấu) |
+|---|---:|---:|
+| không dấu/viết tắt (13 câu) | **0.442** | 0.809 |
+| có dấu (27 câu) | 0.734 | 0.806 |
+
+- Câu hỏi judge sinh ra **đúng trọng tâm** (~0.81 ở cả hai nhóm); điểm thấp chủ yếu do bge-m3 so câu gốc **không dấu**
+  với câu hỏi có dấu. Đây là giới hạn của metric, mọi thí sinh đều gặp. Cách "ăn" phần chênh này là trả lời không
+  dấu: làm sụp ROUGE-L/String Presence (bộ chuẩn hóa giữ dấu) và là thao túng judge → **không làm**.
+- Phần sửa được: câu phụ không được hỏi kéo câu hỏi sinh ngược lệch hướng → prompt v5.
+
+### Chẩn đoán Query Rewriter (E4, rewrite v2)
+
+- Dịch **viết tắt** gần như hoàn hảo: 0 lỗi trong train (gcc 24/24, proptit 42/42, ko 10/10, mpc, mm, lt, nk, tv, cn, hv, dc...);
+  15 viết tắt tự đặt ngoài train đúng 14/15.
+- Lỗi thật là **chữ không dấu đa nghĩa**: "người dung lop" → "học viên" (đúng: đứng lớp, train-0066: SP 0, ROUGE-L 0.24),
+  "nhan" → "nhận" (đúng: nhắn), "ve" → "thiết kế" (đúng: vẽ), "thi gì" → "có bài thi hay không".
+- Tác dụng phụ của rewrite v2: câu xin tư vấn ("học dpt nên vào CLB nào") bị tách thành 3 câu hỏi con theo 3 CLB.
+- Rewrite v3 sửa cả 11 ca thăm dò; train-0066: SP 0 → 1, ROUGE-L 0.24 → 0.85.
 
 ### Ablation E4 (train)
 
