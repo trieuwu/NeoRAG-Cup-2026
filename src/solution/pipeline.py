@@ -10,6 +10,8 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_CONTEXT_K=5        số đoạn đưa vào prompt
     RAG_USE_RERANK=1       rerank bằng cross-encoder local (cần install.py --local)
     RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
+    RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
+    RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
 """
 
 from __future__ import annotations
@@ -43,10 +45,11 @@ def _apply_env(obj) -> None:
 class PipelineConfig:
     rewrite: bool = True
     rewrite_prompt: str = "v3"  # "v3" (từ điển PTIT, phân giải chữ không dấu) | "v2" | "v1"
-    prompt: str = (
-        "v5"  # "v5" (v4 + bỏ câu phụ, dùng tên gọi của người hỏi) | "v4" | "v3" | "v2" | "baseline"
-    )
+    # "v6" (câu đầu đủ chủ thể + khía cạnh, ví dụ động) | "v5" | "v4" | "v3" | "v2" | "baseline"
+    prompt: str = "v6"
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
+    dynamic_few_shot: bool = True  # E6: ví dụ few-shot động từ train (Leave-One-Out)
+    few_shot_k: int = 4
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
@@ -79,6 +82,11 @@ class SolutionPipeline(RAGPipeline):
 
             reranker = CrossEncoderReranker()
         self.retriever = HybridRetriever(self.embedder, self.config.retrieval, reranker)
+        self.few_shot = None
+        if self.config.dynamic_few_shot:
+            from solution.fewshot import FewShotSelector
+
+            self.few_shot = FewShotSelector(self.embedder, k=self.config.few_shot_k)
         self.last_trace: Trace | None = None
 
     def index(self, corpus: list[Document]) -> None:
@@ -93,8 +101,11 @@ class SolutionPipeline(RAGPipeline):
 
     def run(self, query: str) -> RAGOutput:
         plan, docs = self.retrieve(query)
+        examples = (
+            [(e.query, e.answer) for e in self.few_shot.select(plan)] if self.few_shot else None
+        )
         messages = answer_messages(
-            query, plan.rewritten, docs[: self.config.context_k], self.config.prompt
+            query, plan.rewritten, docs[: self.config.context_k], self.config.prompt, examples
         )
         answer = self.llm.chat(messages, model=self.llm_model)
         self.last_trace = Trace(plan, docs)
