@@ -56,6 +56,12 @@ ABLATIONS: dict[str, dict] = {
         "use_anchors": True,
         "anchors_candidates_only": True,
     },
+    "r12_max8": {
+        "rerank_depth": 30,
+        "rerank_max": 8,
+        "use_anchors": True,
+        "anchors_candidates_only": True,
+    },
 }
 
 
