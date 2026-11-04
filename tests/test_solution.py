@@ -89,3 +89,42 @@ def test_config_reads_env_overrides(monkeypatch):
     monkeypatch.setenv("RAG_CONTEXT_K", "3")
     cfg = PipelineConfig.from_env()
     assert cfg.rewrite is False and cfg.context_k == 3 and cfg.retrieval.club_boost == 2.5
+
+
+class FakeReranker:
+    """Cross-encoder giả: đoạn nào chứa từ khóa thì điểm cao."""
+
+    def __init__(self, keyword: str):
+        self.keyword = keyword
+
+    def score(self, queries, docs):
+        return {d.id: float(self.keyword in d.text) for d in docs}
+
+
+def test_rerank_promotes_doc_preferred_by_cross_encoder(corpus):
+    from solution.retrieval import HybridRetriever, RetrievalConfig
+
+    cfg = RetrievalConfig(use_rerank=True, w_rerank=5.0, club_boost=0.0)
+    retriever = HybridRetriever(FakeEmbedder(), cfg, FakeReranker("2023"))
+    retriever.index(corpus)
+    docs = retriever.retrieve(QueryPlan("clb thanh lap", "CLB thành lập ngày nào"), n=3)
+    assert docs[0].id == 3  # đoạn GCC "ra đời năm 2023" được cross-encoder đẩy lên đầu
+
+
+def test_diversify_puts_every_asked_club_in_top_k(corpus):
+    from solution.retrieval import HybridRetriever, RetrievalConfig
+
+    retriever = HybridRetriever(FakeEmbedder(), RetrievalConfig(diversify_clubs=True))
+    retriever.index(corpus)
+    plan = QueryPlan("so sanh", "So sánh", clubs=["proptit", "gcc"])
+    ranked = retriever._diversify(plan, [0, 1, 2], k=2)  # top-2 ban đầu: ProPTIT, Multimedia
+    assert {corpus[i].club for i in ranked[:2]} >= {"CLB Lập Trình PTIT", corpus[2].club}
+
+
+def test_few_shot_prompt_keeps_real_question_last(corpus):
+    from solution.prompts import FEW_SHOT, answer_messages
+
+    msgs = answer_messages("câu hỏi thật", "câu hỏi thật", corpus, "v3")
+    assert len(msgs) == 2 + 2 * len(FEW_SHOT)
+    assert msgs[-1]["role"] == "user" and "câu hỏi thật" in msgs[-1]["content"]
+    assert "TÀI LIỆU" in msgs[-1]["content"]
