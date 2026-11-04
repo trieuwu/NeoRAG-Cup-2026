@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 
 from neorag.data import Document
+from solution.resilience import record
 
 DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
 
@@ -142,6 +143,8 @@ class LLMReranker:
             if isinstance(i, int | str) and str(i).isdigit() and int(i) in valid
         ]
         order = list(dict.fromkeys(order))
+        if not order:
+            record("rerank", "JSON hỏng hoặc không có id hợp lệ: giữ thứ hạng local")
         scores: dict[
             int, float
         ] = {}  # chỉ đoạn được chọn; đoạn không được chọn không có điểm rerank

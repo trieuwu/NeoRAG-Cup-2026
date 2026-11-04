@@ -14,6 +14,7 @@ import numpy as np
 from neorag.data import Document
 from solution.bm25 import BM25
 from solution.query import CLUBS, QueryPlan
+from solution.resilience import record
 from solution.textproc import expand_abbreviations, fold, tokens
 
 
@@ -75,7 +76,12 @@ class HybridRetriever:
         self.docs = corpus
         texts = [doc_repr(d, self.config.index_metadata) for d in corpus]
         self.bm25 = BM25([tokens(t) for t in texts])
-        self.doc_vectors = self.embedder.embed(texts) if self.config.use_dense else None
+        self.doc_vectors = None
+        if self.config.use_dense:
+            try:
+                self.doc_vectors = self.embedder.embed(texts)
+            except Exception as exc:  # noqa: BLE001 - gateway lỗi: chạy tiếp với BM25
+                record("index_dense", exc)
         self.anchor_bm25 = self.anchor_vectors = self.anchor_owner = None
         if self.config.use_anchors:
             self._index_anchors(corpus)
@@ -118,7 +124,7 @@ class HybridRetriever:
                 [expand_abbreviations(fold(plan.original)), plan.rewritten, *plan.sub_queries]
             )
             out.append((self._top(self.bm25.scores(tokens(bm25_query))), cfg.w_bm25))
-        if cfg.use_dense:
+        if cfg.use_dense and self.doc_vectors is not None:
             texts = [plan.rewritten]
             weights = [cfg.w_dense_rewritten]
             if fold(plan.original) != fold(plan.rewritten):
@@ -126,9 +132,13 @@ class HybridRetriever:
                 weights.append(cfg.w_dense_original)
             texts += plan.sub_queries
             weights += [cfg.w_dense_sub] * len(plan.sub_queries)
-            q_vectors = self.embedder.embed(texts)
-            for vec, w in zip(q_vectors, weights, strict=True):
-                out.append((self._top(self.doc_vectors @ vec), w))
+            try:
+                q_vectors = self.embedder.embed(texts)
+            except Exception as exc:  # noqa: BLE001 - embedding lỗi: bỏ tín hiệu dense
+                record("dense", exc)
+            else:
+                for vec, w in zip(q_vectors, weights, strict=True):
+                    out.append((self._top(self.doc_vectors @ vec), w))
         if include_anchors and cfg.use_anchors and self.anchor_bm25 is not None:
             out.append((self._anchor_bm25_top(plan), cfg.w_anchor_bm25))
             texts = [plan.rewritten, plan.original, *plan.sub_queries]
@@ -137,9 +147,10 @@ class HybridRetriever:
                 cfg.w_anchor_dense_original,
                 *[cfg.w_anchor_dense_sub] * len(plan.sub_queries),
             ]
-            for vec, w in zip(self.embedder.embed(texts), weights, strict=True):
-                if w:
-                    out.append((self._top(self._anchor_doc_scores(vec)), w))
+            if any(weights):
+                for vec, w in zip(self.embedder.embed(texts), weights, strict=True):
+                    if w:
+                        out.append((self._top(self._anchor_doc_scores(vec)), w))
         return out
 
     def _anchor_bm25_top(self, plan: QueryPlan) -> list[int]:
@@ -179,6 +190,12 @@ class HybridRetriever:
             head += sorted(extra, key=lambda i: (position.get(i, len(ranked)), i))
         return head
 
+    def local_ranking(self, query: str, n: int = 10) -> list[Document]:
+        """Thứ hạng chỉ dùng BM25 trên câu hỏi gốc, không gọi gateway: phương án cuối cùng."""
+        q = tokens(" ".join([expand_abbreviations(fold(query)), query]))
+        scores = self.bm25.scores(q)
+        return [self.docs[int(i)] for i in np.argsort(-scores, kind="stable")[:n]]
+
     def retrieve(self, plan: QueryPlan, n: int = 10) -> list[Document]:
         cfg = self.config
         ranked = self.fused_ranking(plan)
@@ -192,7 +209,13 @@ class HybridRetriever:
         """Gộp lần hai: thứ hạng RRF + thứ hạng của reranker (trọng số w_rerank) trên tập ứng viên."""
         cfg = self.config
         head = self.candidate_pool(plan, ranked)
-        ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
+        try:
+            ce = self.reranker.score(
+                [plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head]
+            )
+        except Exception as exc:  # noqa: BLE001 - reranker lỗi: giữ thứ hạng local (hybrid RRF)
+            record("rerank", exc)
+            return ranked
         scored = [i for i in head if self.docs[i].id in ce]  # LLM chỉ chấm đoạn được chọn
         ce_ranking = sorted(scored, key=lambda i: (-ce[self.docs[i].id], i))
         fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
