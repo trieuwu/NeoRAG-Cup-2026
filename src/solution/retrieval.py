@@ -35,7 +35,7 @@ class RetrievalConfig:
     diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
     diversify_prefer_intro: bool = False  # đại diện của mỗi CLB là đoạn "Giới thiệu chung" nếu có
     # E6: Synthetic Question Anchors (solution.anchors, data/solution/doc_anchors.jsonl)
-    use_anchors: bool = True  # bench E6: Retrieval 87.99 -> 91.21
+    use_anchors: bool = False  # train +3.2 nhưng Public không tăng (E6) -> tắt mặc định
     w_anchor_bm25: float = 1.5  # BM25 trên câu hỏi giả định + thực thể của mỗi đoạn
     # Dense trên anchors (max cosine với từng câu hỏi giả định): bench cho thấy làm giảm điểm -> tắt.
     w_anchor_dense: float = 0.0  # bản viết lại

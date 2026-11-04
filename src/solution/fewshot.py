@@ -28,6 +28,7 @@ class Example:
     query: str
     answer: str
     answerable: bool
+    relevant_ids: frozenset[int] = frozenset()
 
 
 class FewShotSelector:
@@ -35,7 +36,13 @@ class FewShotSelector:
         self.embedder, self.k = embedder, k
         rows = read_jsonl(path)
         self.examples = [
-            Example(r["id"], r["query"], r["answer"], bool(r.get("answerable", True)))
+            Example(
+                r["id"],
+                r["query"],
+                r["answer"],
+                bool(r.get("answerable", True)),
+                frozenset(int(i) for i in r.get("relevant_ids") or []),
+            )
             for r in rows
             if r.get("answer")
         ]
@@ -43,7 +50,10 @@ class FewShotSelector:
         self.bm25 = BM25([tokens(expand_abbreviations(f)) for f in self._folded])
         self.vectors = embedder.embed([e.query for e in self.examples])
 
-    def select(self, plan: QueryPlan) -> list[Example]:
+    def select(self, plan: QueryPlan, avoid_doc_ids: set[int] | None = None) -> list[Example]:
+        """avoid_doc_ids: bỏ ví dụ có đoạn đúng thuộc tập này (thường là các đoạn đưa vào prompt), để ví dụ
+        chỉ dạy văn phong, không mang sẵn dữ kiện của chính câu hỏi (E6 trên Public: SP -3.8 vì chép ví dụ).
+        Quy tắc áp dụng y hệt trên train và test, nên điểm train phản ánh thật hơn Leave-One-Out theo câu hỏi."""
         banned = {fold(plan.original), fold(plan.rewritten)}  # Leave-One-Out
         query = " ".join([expand_abbreviations(fold(plan.original)), plan.rewritten])
         lexical = np.argsort(-self.bm25.scores(tokens(query)), kind="stable")[:30]
@@ -52,6 +62,11 @@ class FewShotSelector:
         )[:30]
         scores = rrf([([int(i) for i in lexical], 1.0), ([int(i) for i in dense], 1.0)], k=60)
         ranked = sorted(scores, key=lambda i: (-scores[i], i))
-        picked = [self.examples[i] for i in ranked if self._folded[i] not in banned][: self.k]
+        avoid = avoid_doc_ids or set()
+        picked = [
+            self.examples[i]
+            for i in ranked
+            if self._folded[i] not in banned and not (self.examples[i].relevant_ids & avoid)
+        ][: self.k]
         # Thứ tự: ví dụ giống nhất đặt cuối, sát câu hỏi thật.
         return picked[::-1]

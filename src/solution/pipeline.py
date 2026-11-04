@@ -46,10 +46,11 @@ class PipelineConfig:
     rewrite: bool = True
     rewrite_prompt: str = "v3"  # "v3" (từ điển PTIT, phân giải chữ không dấu) | "v2" | "v1"
     # "v6" (câu đầu đủ chủ thể + khía cạnh, ví dụ động) | "v5" | "v4" | "v3" | "v2" | "baseline"
-    prompt: str = "v6"
+    prompt: str = "v5"  # E6 (v6 + few-shot động) thấp hơn trên Public -> giữ v5
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
-    dynamic_few_shot: bool = True  # E6: ví dụ few-shot động từ train (Leave-One-Out)
+    dynamic_few_shot: bool = False  # E6: Public SP -3.8 -> tắt mặc định
     few_shot_k: int = 4
+    few_shot_style_only: bool = True  # bỏ ví dụ có đoạn đúng trùng các đoạn trong prompt
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
@@ -102,7 +103,17 @@ class SolutionPipeline(RAGPipeline):
     def run(self, query: str) -> RAGOutput:
         plan, docs = self.retrieve(query)
         examples = (
-            [(e.query, e.answer) for e in self.few_shot.select(plan)] if self.few_shot else None
+            [
+                (e.query, e.answer)
+                for e in self.few_shot.select(
+                    plan,
+                    {d.id for d in docs[: self.config.context_k]}
+                    if self.config.few_shot_style_only
+                    else None,
+                )
+            ]
+            if self.few_shot
+            else None
         )
         messages = answer_messages(
             query, plan.rewritten, docs[: self.config.context_k], self.config.prompt, examples
