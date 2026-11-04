@@ -25,6 +25,71 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 | E6 | `4cec9a4` | **Paradigm shift: anchors + Dynamic Few-Shot + prompt v6.** R: Synthetic Question Anchors (Haiku sinh 8 câu hỏi giả định + thực thể cho mỗi đoạn, chỉ từ corpus), thêm danh sách BM25 trên anchors (w=1.5) vào RRF. G: 4 ví dụ (câu hỏi, đáp án chuẩn) của train giống câu hỏi nhất (BM25 + dense, Leave-One-Out) thay few-shot tĩnh; prompt v6: câu đầu chứa đủ chủ thể và khía cạnh được hỏi, không lấy thông tin từ ví dụ | **95.15** | **89.96** | **88.51** | (nj) Retrieval **91.21** · SP **90.30** · ROUGE-L **65.86** · tập con 42 câu có judge: **91.20** | **82.84** ⚠️ | — | **Public THẤP hơn E5 (83.55 → 82.84): Retrieval 83.67 → 82.87 (R@5 85.44 = · MRR@5 85.52 → 84.13 · NDCG@5 80.05 → 79.06), Generation 83.43 → 82.80 (SP 88.46 → 84.62 · ROUGE-L 57.58 → 59.04 · Relevancy 60.55 → 60.38 · 1−Noise 96.58 → 95.30). Mức tăng trên train không chuyển sang Public; 5/42 câu trả lời Public có > 30% 4-gram trùng đáp án ví dụ few-shot.** So với E5 trên train: Retrieval train +3.2 (NDCG@5 +3.7), tập con có judge +2.17 (Relevancy 64.70 → 66.81, SP 90.75 → 93.58, Groundedness 97.50 → 98.75). Nhóm không dấu MRR@5 0.76 → 0.89. File nộp: `outputs/public_test_submission.zip` (E5 giữ ở `public_test_submission_e5_83.55.zip`) |
 | E7 | `cbbb5d7` | **E5 + rerank listwise bằng Haiku.** R: như E5 (không anchors), thêm 1 lời gọi Haiku/câu: đọc câu hỏi (kèm câu hỏi con) và top-20 ứng viên RRF, trả về danh sách id xếp hạng; gộp RRF lần hai với w_rerank = 4; đoạn không được chọn giữ thứ hạng RRF. G: như E5 (prompt v5, few-shot tĩnh) | 97.68 | **100.00** | **98.11** | (nj) Retrieval **98.59** · SP 88.67 · ROUGE-L 64.41 · tập con 42 câu có judge: **93.32** | **88.95** | — | **Public: Retrieval 93.80 (R@5 91.59 · MRR@5 97.62 · NDCG@5 92.20), Generation 84.09 (SP 88.46 · ROUGE-L 58.50 · Groundedness 100 · Relevancy 60.17 · 1−Noise 97.44 · Abstention 100). +5.40 so với E5: Retrieval +10.1, generation +0.7.** Bench Retrieval: E5 87.99 → w_rerank 1: 95.81 · 2: 97.99 · 4: 98.80 · 10: 98.85 (trước khi sửa lỗi thứ tự id), 98.59 sau khi sửa. Tập con có judge: SP 94.50, ROUGE-L 67.31, Groundedness 100, Relevancy 65.95, 1−Noise 98.75. Không dùng thông tin train trong prompt reranker → ít rủi ro overfit hơn anchors. Chi phí: +1 lời gọi Haiku/câu, latency +vài giây |
 
+### E8 (nhánh `perf/mo-rong-ung-vien-rerank`, commit `cf589bb`): mở rộng tập ứng viên rerank, TRƯỢT vòng 1
+
+Ý tưởng: pool rerank 20 → 30, Haiku chọn tối đa 10 đoạn (thay vì 8), anchors chỉ bổ sung ứng viên (top-5 BM25
+trên anchors), không cộng vào RRF. Đo bằng `python -m solution bench [--stress]`. Bộ stress = 122 câu train bỏ dấu
+hoàn toàn và thay viết tắt (dpt, mm/mpc, hv, gcc, clb lap trinh/proptit, tv, sv, ko, dc), sinh bằng luật
+(`solution.stress`), không dùng câu Public/Private.
+
+| | E7 (pool 20, max 8) | pool 30 / max 10 + anchors | pool 30 / max 8 + anchors |
+|---|---:|---:|---:|
+| Pool trung bình | 20.0 | 30.3 | 30.3 |
+| **Train**: Recall của pool | 98.36 | 99.45 | 99.45 |
+| Train: Recall pool, nhóm nhiều đoạn | 0.97 | 0.97 | 0.97 |
+| Train: R@5 / MRR@5 / NDCG@5 | 97.68 / 100 / 98.11 | 98.63 / 100 / 98.72 | 98.22 / 100 / 98.35 |
+| **Train: Retrieval** | 98.59 | 99.12 (+0.53) | 98.86 (+0.27) |
+| **Stress**: Recall của pool | 98.09 | 99.32 | 99.32 |
+| Stress: Recall pool, nhóm nhiều đoạn | 0.97 | 0.97 | 0.97 |
+| Stress: R@5 / MRR@5 / NDCG@5 | 97.40 / 97.40 / 96.08 | 97.40 / 97.54 / 96.59 | 97.81 / 97.75 / 96.54 |
+| **Stress: Retrieval** | 96.96 | 97.18 (+0.22) | 97.37 (+0.41) |
+
+Tiêu chí giữ (đặt trước khi chạy): stress tăng ≥ 1 VÀ train không giảm quá 0.3. **Cả hai cấu hình trượt** → giữ E7,
+không chạy vòng 2 (generation), không nộp Public. Chi phí ước tính ~850 lời gọi Haiku (~3.5M token vào, ~$0.35 theo
+giá niêm yết). Rút ra:
+- Pool 20 của E7 đã chứa 98% đoạn đúng ở cả train lẫn stress: nút thắt không nằm ở tập ứng viên.
+- Bộ stress chỉ khó hơn train ~1.6 điểm: bước viết lại câu hỏi (rewrite v3) đã khôi phục dấu và viết tắt gần như
+  trọn vẹn, nên mở rộng ứng viên không có đất để tăng. Anchors không thêm được đoạn đúng nào vào pool.
+- Code (`RAG_RERANK_MAX`, `RAG_ANCHORS_CANDIDATES_ONLY`, `bench --stress`, cột Recall@pool) được giữ làm công cụ đo,
+  mặc định vẫn là E7.
+
+### E9 (nhánh `perf/van-phong-tra-loi`, không merge, chỉ lưu vết): cấu trúc Generation, TRƯỢT tiêu chí
+
+**Chẩn đoán trước khi thử (miễn phí, train E7 `--no-judge`, 115 câu có đáp án):**
+- Câu trả lời **không dài hơn** đáp án chuẩn: trung vị 184 so với 201 ký tự, 1.77 so với 1.71 câu. Trong 20 câu
+  ROUGE-L thấp nhất có Recall@5 = 1: đáp án chuẩn 45.8 âm tiết, E7 38.6.
+- Khác biệt ở khuôn câu: đáp án chuẩn mở đầu bằng nguồn/thời điểm ("Theo nội quy ...") 41.7% (E7 15.7%), nối mục
+  bằng `;` 29.6% (E7 0.9%); E7 thêm tên gọi trong ngoặc "(ProPTIT)" 40% (chuẩn 2.6%). Không bên nào dùng gạch đầu dòng.
+- Nhóm "thiếu dữ liệu" yếu nhất (ROUGE-L 0.47, SP 0.50): E7 chỉ từ chối, đáp án chuẩn nêu phần tài liệu có.
+- Relevancy (tập con 42 câu E7 có judge): nhóm có dấu 0.746, nhóm không dấu/viết tắt 0.530 → nhóm có dấu đã gần
+  trần paraphrase của bge-m3, phần thiếu chủ yếu do câu không dấu.
+
+**Thử nghiệm** (cùng retrieval E7; dynamic few-shot = 4 ví dụ train gần nhất, Leave-One-Out, bỏ ví dụ có đoạn đúng
+trùng các đoạn trong prompt):
+
+| Train 126 câu | E7 (v5 + few-shot tĩnh) | G1: v7 | G2: v5 + dynamic | G3: v7 + dynamic |
+|---|---:|---:|---:|---:|
+| String Presence | 88.67 | 90.55 | **92.25** | 92.17 |
+| ROUGE-L | 64.41 | 66.30 | 66.53 | **66.61** |
+| Groundedness | 99.57 | – | 97.39 | 97.54 |
+| Response Relevancy | 67.91 | – | **68.55** | 65.35 |
+| 1 − Noise | 96.23 | – | 94.93 | 96.52 |
+| Abstention | 100 | – | 100 | 90.91 |
+| **Điểm train (judge)** | **92.36** | – | 92.60 | 91.72 |
+| 4-gram trùng với ví dụ động (TB / số câu > 30%) | 8.7% / 4 | 7.4% / 2 | 9.4% / 3 | 8.0% / 2 |
+
+Tiêu chí giữ (đặt trước): ROUGE-L +2.0, SP không giảm, Groundedness và Abstention không giảm quá 1.
+- **G3 trượt**: Abstention −9.1 (train-0071: câu "Tài liệu chỉ ghi ... có Chủ nhiệm ..." bị coi là đưa thông tin như
+  câu trả lời), Groundedness −2.0, Relevancy −2.6 (mở đầu "Theo Phòng truyền thống ..." làm câu hỏi sinh ngược lệch).
+  Lỗi nằm ở prompt v7, không ở few-shot động.
+- **G2 trượt** ở Groundedness (−2.2, 5 câu từ 1.0 xuống 0.5); tổng điểm train +0.24, trong mức nhiễu của judge.
+- Không có dấu hiệu chép ví dụ (mức trùng 4-gram ngang E7, vốn không thấy ví dụ): bộ lọc "style-only" chặn được
+  lỗi của E6.
+- Kết luận: **giữ E7**. Prompt v7 (`RAG_PROMPT=v7`) chỉ có trên nhánh `perf/van-phong-tra-loi`, không merge vào `main` để bản Private không chứa code chết.
+
+Chi phí ước tính: 3 biến thể `--no-judge` ~380 lời gọi (~$0.1); judge đủ 126 câu cho E7 (84 câu chưa có cache), G2,
+G3 (~$0.5 theo giá niêm yết).
+
 ### Ablation E6
 
 **Bài học từ Public (82.84 < 83.55):** anchors không giúp retrieval Public (Recall@5 giữ nguyên, MRR/NDCG giảm nhẹ);

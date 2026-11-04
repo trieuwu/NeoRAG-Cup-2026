@@ -33,13 +33,18 @@ class RetrievalConfig:
     rerank_backend: str = (
         "llm"  # "llm" (Haiku listwise, qua gateway) | "cross_encoder" (local, cần torch)
     )
-    rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
+    rerank_depth: int = 20  # số ứng viên từ RRF đưa vào reranker
+    rerank_max: int = 8  # số đoạn tối đa reranker LLM được chọn
     w_rerank: float = 4.0  # trọng số thứ hạng của reranker khi gộp RRF lần hai (bench: 1 -> 95.8, 2 -> 98.0, 4 -> 98.8)
     diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
     diversify_prefer_intro: bool = False  # đại diện của mỗi CLB là đoạn "Giới thiệu chung" nếu có
     # E6: Synthetic Question Anchors (solution.anchors, data/solution/doc_anchors.jsonl)
     use_anchors: bool = False  # train +3.2 nhưng Public không tăng (E6) -> tắt mặc định
     w_anchor_bm25: float = 1.5  # BM25 trên câu hỏi giả định + thực thể của mỗi đoạn
+    # Nhánh R: anchors chỉ bổ sung ứng viên cho reranker, KHÔNG cộng vào điểm RRF (thứ hạng cuối do
+    # RRF không anchors + reranker quyết định). Cần use_anchors=True và use_rerank=True.
+    anchors_candidates_only: bool = False
+    anchor_candidates: int = 5  # số đoạn đứng đầu theo BM25 trên anchors được thêm vào tập ứng viên
     # Dense trên anchors (max cosine với từng câu hỏi giả định): bench cho thấy làm giảm điểm -> tắt.
     w_anchor_dense: float = 0.0  # bản viết lại
     w_anchor_dense_original: float = 0.0  # câu gốc
@@ -103,7 +108,9 @@ class HybridRetriever:
     def _top(self, scores: np.ndarray) -> list[int]:
         return [int(i) for i in np.argsort(-scores, kind="stable")[: self.config.depth]]
 
-    def rankings(self, plan: QueryPlan) -> list[tuple[list[int], float]]:
+    def rankings(
+        self, plan: QueryPlan, include_anchors: bool = True
+    ) -> list[tuple[list[int], float]]:
         cfg = self.config
         out: list[tuple[list[int], float]] = []
         if cfg.use_bm25:
@@ -122,11 +129,8 @@ class HybridRetriever:
             q_vectors = self.embedder.embed(texts)
             for vec, w in zip(q_vectors, weights, strict=True):
                 out.append((self._top(self.doc_vectors @ vec), w))
-        if cfg.use_anchors and self.anchor_bm25 is not None:
-            bm25_query = " ".join(
-                [expand_abbreviations(fold(plan.original)), plan.rewritten, *plan.sub_queries]
-            )
-            out.append((self._top(self.anchor_bm25.scores(tokens(bm25_query))), cfg.w_anchor_bm25))
+        if include_anchors and cfg.use_anchors and self.anchor_bm25 is not None:
+            out.append((self._anchor_bm25_top(plan), cfg.w_anchor_bm25))
             texts = [plan.rewritten, plan.original, *plan.sub_queries]
             weights = [
                 cfg.w_anchor_dense,
@@ -138,31 +142,62 @@ class HybridRetriever:
                     out.append((self._top(self._anchor_doc_scores(vec)), w))
         return out
 
-    def retrieve(self, plan: QueryPlan, n: int = 10) -> list[Document]:
+    def _anchor_bm25_top(self, plan: QueryPlan) -> list[int]:
+        bm25_query = " ".join(
+            [expand_abbreviations(fold(plan.original)), plan.rewritten, *plan.sub_queries]
+        )
+        return self._top(self.anchor_bm25.scores(tokens(bm25_query)))
+
+    @property
+    def _anchors_as_candidates(self) -> bool:
         cfg = self.config
-        scores = rrf(self.rankings(plan), cfg.rrf_k)
+        return cfg.use_anchors and cfg.anchors_candidates_only and self.anchor_bm25 is not None
+
+    def fused_ranking(self, plan: QueryPlan) -> list[int]:
+        """Thứ hạng RRF (kèm ưu tiên CLB), chưa rerank. Index của đoạn trong self.docs."""
+        cfg = self.config
+        scores = rrf(
+            self.rankings(plan, include_anchors=not self._anchors_as_candidates), cfg.rrf_k
+        )
         targets = plan.club_names
         # Chỉ ưu tiên khi câu hỏi nhắm tới một phần các CLB (hỏi chung cả 3 thì không lọc).
         if targets and cfg.club_boost and len(targets - {"Cộng đồng S2B"}) < 3:
             for idx in scores:
                 if self.docs[idx].club in targets:
                     scores[idx] += cfg.club_boost / cfg.rrf_k
-        ranked = sorted(scores, key=lambda i: (-scores[i], i))
+        return sorted(scores, key=lambda i: (-scores[i], i))
+
+    def candidate_pool(self, plan: QueryPlan, ranked: list[int] | None = None) -> list[int]:
+        """Tập ứng viên đưa vào reranker: top rerank_depth của RRF, cộng (nếu bật) các đoạn đứng đầu
+        theo anchors chưa có trong đó. Đoạn thêm vào giữ đúng vị trí của nó trong thứ hạng RRF."""
+        cfg = self.config
+        ranked = ranked if ranked is not None else self.fused_ranking(plan)
+        head = ranked[: cfg.rerank_depth]
+        if self._anchors_as_candidates:
+            extra = set(self._anchor_bm25_top(plan)[: cfg.anchor_candidates]) - set(head)
+            position = {i: r for r, i in enumerate(ranked)}
+            head += sorted(extra, key=lambda i: (position.get(i, len(ranked)), i))
+        return head
+
+    def retrieve(self, plan: QueryPlan, n: int = 10) -> list[Document]:
+        cfg = self.config
+        ranked = self.fused_ranking(plan)
         if cfg.use_rerank and self.reranker is not None:
-            ranked = self._rerank(plan, ranked, scores)
+            ranked = self._rerank(plan, ranked)
         if cfg.diversify_clubs:
             ranked = self._diversify(plan, ranked)
         return [self.docs[i] for i in ranked[:n]]
 
-    def _rerank(self, plan: QueryPlan, ranked: list[int], scores: dict[int, float]) -> list[int]:
-        """Gộp lần hai: thứ hạng RRF + thứ hạng cross-encoder (trọng số w_rerank) trên top-N."""
+    def _rerank(self, plan: QueryPlan, ranked: list[int]) -> list[int]:
+        """Gộp lần hai: thứ hạng RRF + thứ hạng của reranker (trọng số w_rerank) trên tập ứng viên."""
         cfg = self.config
-        head = ranked[: cfg.rerank_depth]
+        head = self.candidate_pool(plan, ranked)
         ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
         scored = [i for i in head if self.docs[i].id in ce]  # LLM chỉ chấm đoạn được chọn
         ce_ranking = sorted(scored, key=lambda i: (-ce[self.docs[i].id], i))
         fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
-        return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
+        pool = set(head)
+        return sorted(head, key=lambda i: (-fused[i], i)) + [i for i in ranked if i not in pool]
 
     def _diversify(self, plan: QueryPlan, ranked: list[int], k: int = 5) -> list[int]:
         """Câu hỏi về >= 2 CLB: mỗi CLB có một đoạn đại diện trong top-k.

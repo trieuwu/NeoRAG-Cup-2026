@@ -9,6 +9,9 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_PROMPT=baseline    dùng prompt của baseline
     RAG_CONTEXT_K=5        số đoạn đưa vào prompt
     RAG_USE_RERANK=1       rerank top-N (RAG_RERANK_BACKEND=llm: Haiku listwise; cross_encoder: local)
+    RAG_RERANK_DEPTH=20    số ứng viên RRF đưa vào reranker
+    RAG_RERANK_MAX=8       số đoạn tối đa reranker LLM được chọn
+    RAG_ANCHORS_CANDIDATES_ONLY=1  (kèm RAG_USE_ANCHORS=1) anchors chỉ bổ sung ứng viên cho reranker
     RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
     RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
     RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
@@ -82,7 +85,9 @@ class SolutionPipeline(RAGPipeline):
             if self.config.retrieval.rerank_backend == "llm":
                 from solution.rerank import LLMReranker
 
-                reranker = LLMReranker(self.llm, self.llm_model)
+                reranker = LLMReranker(
+                    self.llm, self.llm_model, max_ids=self.config.retrieval.rerank_max
+                )
             else:
                 from solution.rerank import CrossEncoderReranker
 
