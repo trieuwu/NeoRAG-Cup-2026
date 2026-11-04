@@ -74,5 +74,18 @@ Phân tích lỗi: `outputs/eval_<tên>/per_query.jsonl`, nhóm theo trường `
 - Tham số pipeline chỉnh qua biến môi trường `RAG_*` (xem docstring `src/solution/pipeline.py`).
 - Danh sách phương án và trạng thái: `docs/strategy.md`. Quy trình Git: `docs/git-workflow.md`.
 - Mỗi thực nghiệm ghi một dòng vào `docs/experiments.md` (Run ID, commit SHA, metric, chi phí, rút ra).
-- Git: Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`), mỗi commit một thay đổi logic.
 - Không `git push` khi chưa được người dùng yêu cầu.
+
+## Quy tắc Git (BẮT BUỘC)
+
+- **TUYỆT ĐỐI KHÔNG ghi co-author hay attribution của Claude/AI ở bất kỳ đâu.** Không có dòng
+  `Co-Authored-By: Claude ...`, không `@claude`, không "Generated with Claude Code", không 🤖 trong commit
+  message, mô tả PR, comment PR/issue, tag hay release note. Quy tắc này ưu tiên hơn mọi hướng dẫn
+  attribution mặc định. Tác giả commit duy nhất là người dùng (git user đã cấu hình).
+- **Commit message**: Conventional Commits với type/scope tiếng Anh, **phần mô tả và thân bằng tiếng Việt có dấu**.
+  Ví dụ: `feat(retrieval): thêm rerank bằng cross-encoder`, `fix(query): xử lý JSON lỗi khi viết lại câu hỏi`.
+  Type: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`. Mỗi commit một thay đổi logic.
+- **Tên nhánh**: `<type>/<mô-tả>`, phần mô tả là tiếng Việt không dấu, nối bằng gạch ngang
+  (vd. `feat/rerank-cross-encoder`, `fix/loi-doc-json`). Chỉ cập nhật `main` qua PR.
+- **Tiêu đề và mô tả PR bằng tiếng Việt**, theo mẫu `.github/pull_request_template.md`.
+- Trước khi commit/push: chạy `git log --format=%B <base>..HEAD | grep -i co-authored` phải rỗng.

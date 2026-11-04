@@ -8,20 +8,23 @@ kỹ thuật, mỗi cải tiến có PR kèm số liệu, và bản nộp Privat
 | Nhánh | Dùng cho | Ví dụ |
 |---|---|---|
 | `main` | Luôn chạy được, đã qua CI. Chỉ cập nhật qua PR | |
-| `feat/<tên>` | Tính năng mới của pipeline hoặc chatbot | `feat/e1-hybrid-retrieval`, `feat/chatbot-ui` |
-| `exp/<tên>` | Thực nghiệm có thể bị bỏ; merge khi có số liệu tốt hơn | `exp/cross-encoder-rerank` |
-| `fix/<tên>` | Sửa lỗi | `fix/rewrite-json-parse` |
-| `docs/<tên>` | Chỉ thay đổi tài liệu | `docs/pitching-slides` |
+| `feat/<tên>` | Tính năng mới của pipeline hoặc chatbot (tên: tiếng Việt không dấu, gạch ngang) | `feat/e1-truy-xuat-hybrid`, `feat/giao-dien-chatbot` |
+| `exp/<tên>` | Thực nghiệm có thể bị bỏ; merge khi có số liệu tốt hơn | `exp/rerank-cross-encoder` |
+| `fix/<tên>` | Sửa lỗi | `fix/loi-doc-json` |
+| `docs/<tên>` | Chỉ thay đổi tài liệu | `docs/slide-pitching` |
 
 Mỗi nhánh một mục tiêu. Thực nghiệm thất bại vẫn nên ghi lại trong `docs/experiments.md` (kết quả âm cũng là dữ liệu cho pitching).
 
 ## 2. Commit: Conventional Commits
 
 ```
-<type>(<scope>): <mô tả ngắn, thể mệnh lệnh>
+<type>(<scope>): <mô tả ngắn bằng tiếng Việt có dấu>
 
-<thân: vì sao thay đổi, số liệu nếu có>
+<thân bằng tiếng Việt: vì sao thay đổi, số liệu nếu có>
 ```
+
+- `type` và `scope` viết tiếng Anh theo chuẩn; **mô tả và thân viết tiếng Việt**.
+- **Không thêm dòng co-author hay attribution của công cụ AI** (`Co-Authored-By`, "Generated with ...").
 
 | type | Khi nào |
 |---|---|
