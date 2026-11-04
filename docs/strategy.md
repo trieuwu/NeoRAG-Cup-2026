@@ -6,7 +6,7 @@ Mỗi phương án ghi: ý tưởng, metric nhắm tới, chi phí ngân sách, 
 
 Trạng thái: ✅ đã làm · 🔜 nên làm tiếp · 🧪 thử nếu còn thời gian · ⛔ không nên
 
-## 0. Kiến trúc hiện tại (E1)
+## 0. Kiến trúc (E1, xem `docs/experiments.md` cho E2–E6)
 
 ```
 câu hỏi
@@ -22,7 +22,10 @@ câu hỏi
   └─► Generator (Haiku, 1 lời gọi): top-5 đoạn kèm [CLB | chủ đề], prompt v2 trả lời ngắn, bám tài liệu, từ chối đúng cách
 ```
 
-Retrieval train: 72.2 (baseline) → 85.7. String Presence 71.8 → 84.7. ROUGE-L 42.0 → 57.4.
+E6: anchors (doc2query) thêm một danh sách BM25 vào RRF; Dynamic Few-Shot thay few-shot tĩnh; prompt v6.
+Public: 52.40 (baseline) → 80.09 (E3) → 82.28 (E4) → 83.55 (E5).
+
+Retrieval train E1: 72.2 (baseline) → 85.7. String Presence 71.8 → 84.7. ROUGE-L 42.0 → 57.4.
 
 ## 1. Benchmark: Retrieval (50% điểm Benchmark)
 
@@ -31,10 +34,10 @@ Retrieval train: 72.2 (baseline) → 85.7. String Presence 71.8 → 84.7. ROUGE-
 | R1 | Viết lại câu hỏi bằng Haiku (thêm dấu, mở rộng viết tắt) | câu không dấu/viết tắt | 1 lời gọi/câu | thấp | ✅ |
 | R2 | Hybrid BM25 bỏ dấu + dense, gộp RRF | mọi loại | 0 | thấp | ✅ |
 | R3 | Ưu tiên đoạn thuộc CLB được hỏi | nhầm CLB | 0 | thấp | ✅ (tác dụng nhỏ, +0.5) |
-| R4 | **Rerank bằng cross-encoder local** (`BAAI/bge-reranker-v2-m3`) trên top-20 | MRR, NDCG | 0 (chạy máy, cần `install.py --local`) | trung bình | 🔜 |
-| R5 | **Doc2query**: Haiku sinh 5–8 câu hỏi mẫu cho mỗi đoạn (một lần, 118 lời gọi), index thêm vào BM25/dense | diễn đạt khác, không dấu | ~118 lời gọi một lần | trung bình | 🔜 |
+| R4 | **Rerank bằng cross-encoder local** (`BAAI/bge-reranker-v2-m3`) trên top-20 | MRR, NDCG | 0 (chạy máy, cần `install.py --local`) | trung bình | ⛔ máy chỉ có CPU: chậm, thiếu RAM; đã viết code, tắt mặc định |
+| R5 | **Doc2query**: Haiku sinh 5–8 câu hỏi mẫu cho mỗi đoạn (một lần, 118 lời gọi), index thêm vào BM25/dense | diễn đạt khác, không dấu | ~118 lời gọi một lần | trung bình | ✅ E6 (Synthetic Question Anchors, BM25): Retrieval +3.2 |
 | R6 | Rerank bằng Haiku (listwise top-15 → xếp lại) | MRR, NDCG | +1 lời gọi/câu | trung bình | 🧪 (so với R4) |
-| R7 | Câu hỏi con: xen kẽ kết quả từng câu hỏi con thay vì chỉ cộng RRF, để đảm bảo mỗi ý có doc trong top-5 | nhiều đoạn, so sánh | 0 | thấp | 🔜 |
+| R7 | Câu hỏi con: xen kẽ kết quả từng câu hỏi con thay vì chỉ cộng RRF, để đảm bảo mỗi ý có doc trong top-5 | nhiều đoạn, so sánh | 0 | thấp | ✅ E4 (rewrite v2/v3 tách câu hỏi con theo từng CLB): +2.0 |
 | R8 | HyDE: Haiku viết câu trả lời giả định rồi embed | diễn đạt khác | +1 lời gọi/câu | thấp | 🧪 |
 | R9 | Tinh chỉnh trọng số RRF, depth, rrf_k bằng `python -m solution bench` | tổng | 0 | thấp | 🔜 (cẩn thận overfit train) |
 | R10 | Mở rộng từ điển viết tắt/đồng nghĩa (ví dụ "lên clb" → "sinh hoạt") | không dấu | 0 | thấp | 🧪 |
@@ -46,11 +49,11 @@ Lưu ý: metric tính tại k=5 nhưng nộp đủ 10 id không bị phạt (Pre
 | # | Phương án | Nhắm tới | Chi phí | Độ khó | Trạng thái |
 |---|---|---|---|---|---|
 | G1 | Prompt v2: ngắn, chép nguyên số liệu, không chào hỏi, câu từ chối chuẩn | ROUGE-L, SP, Noise | 0 | thấp | ✅ |
-| G2 | **Few-shot** 3–4 cặp hỏi-đáp từ train (đúng văn phong đáp án chuẩn ~200 ký tự) | ROUGE-L, Relevancy | +token/câu | thấp | 🔜 |
+| G2 | **Few-shot** 3–4 cặp hỏi-đáp từ train (đúng văn phong đáp án chuẩn ~200 ký tự) | ROUGE-L, Relevancy | +token/câu | thấp | ✅ E3 tĩnh, E6 động (Dynamic Few-Shot, Leave-One-Out) |
 | G3 | **Lọc ngữ cảnh**: chỉ đưa đoạn có điểm rerank vượt ngưỡng (2–5 đoạn thay vì cố định 5) | Noise, Groundedness | 0 | trung bình (cần R4) | 🔜 |
 | G4 | Hậu xử lý: bỏ markdown, bỏ câu dẫn dắt, cắt độ dài | ROUGE-L | 0 | thấp | 🧪 |
 | G5 | Tự kiểm (Haiku đọc lại câu trả lời + tài liệu, xóa câu không có căn cứ) | Groundedness, Noise | +1 lời gọi/câu | trung bình | 🧪 |
-| G6 | Phân tích `per_query.jsonl` sau mỗi lần chấm judge: tìm câu Noise cao, sửa prompt theo nhóm | tổng | 0 | thấp | 🔜 |
+| G6 | Phân tích `per_query.jsonl` sau mỗi lần chấm judge: tìm câu Noise cao, sửa prompt theo nhóm | tổng | 0 | thấp | ✅ E5 (chẩn đoán Relevancy, Query Rewriter) |
 | G7 | Trả lời theo từng câu hỏi con rồi gộp | so sánh, nhiều đoạn | +lời gọi | cao | ⛔ (đắt, dài dòng) |
 
 Cấm: chèn chỉ dẫn hay nhãn chấm vào câu trả lời nhằm tác động judge.
