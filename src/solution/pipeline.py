@@ -15,11 +15,18 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
     RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
     RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
+    RAG_LOG_PATH=outputs/x_log.jsonl  ghi log từng câu (sự cố, fallback, độ dài, latency)
+
+Chống lỗi (solution.resilience): mọi lời gọi gateway được thử lại khi lỗi tạm thời; bước nào hỏng hẳn
+thì dùng phương án dự phòng (câu hỏi gốc, thứ hạng local, trích đoạn đứng đầu), nên `run()` không bao giờ
+ném exception và output luôn hợp lệ.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
+import time
 from dataclasses import dataclass, field, fields
 
 from neorag.data import Document
@@ -28,6 +35,18 @@ from neorag.pipelines.base import RAGOutput, RAGPipeline
 from neorag.pipelines.baseline import GatewayEmbedder
 from solution.prompts import answer_messages
 from solution.query import QueryPlan, QueryRewriter
+from solution.resilience import (
+    LLMUnavailable,
+    ResilientLLM,
+    append_log,
+    clip_answer,
+    collect_incidents,
+    fallback_answer,
+    is_abstention,
+    record,
+    sanitize_ids,
+    start_incidents,
+)
 from solution.retrieval import HybridRetriever, RetrievalConfig
 
 
@@ -55,6 +74,7 @@ class PipelineConfig:
     few_shot_k: int = 4
     few_shot_style_only: bool = True  # bỏ ví dụ có đoạn đúng trùng các đoạn trong prompt
     n_retrieved: int = 10  # số id nộp để chấm retrieval
+    log_path: str = ""  # RAG_LOG_PATH: file jsonl ghi log từng câu (rỗng = không ghi)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
     @classmethod
@@ -71,13 +91,15 @@ class Trace:
 
     plan: QueryPlan
     docs: list[Document]
+    incidents: list[dict] = field(default_factory=list)
 
 
 class SolutionPipeline(RAGPipeline):
     def __init__(self, config: PipelineConfig | None = None, llm: LLMClient | None = None):
         self.config = config or PipelineConfig.from_env()
         self.llm_model = os.getenv("LLM_MODEL", "claude-haiku-5-5")
-        self.llm = llm or LLMClient(cache_path=".cache/solution.sqlite")
+        base = llm or LLMClient(cache_path=".cache/solution.sqlite")
+        self.llm = base if isinstance(base, ResilientLLM) else ResilientLLM(base)
         self.embedder = GatewayEmbedder(self.llm, os.getenv("EMBEDDING_MODEL", "bge-m3"))
         self.rewriter = QueryRewriter(self.llm, self.llm_model, self.config.rewrite_prompt)
         reranker = None
@@ -102,32 +124,94 @@ class SolutionPipeline(RAGPipeline):
 
     def index(self, corpus: list[Document]) -> None:
         self.retriever.index(corpus)
+        self._valid_ids = {d.id for d in corpus}
 
     def plan(self, query: str) -> QueryPlan:
-        return self.rewriter(query) if self.config.rewrite else QueryPlan(query, query)
+        if not self.config.rewrite:
+            return QueryPlan(query, query)
+        try:
+            return self.rewriter(query)
+        except Exception as exc:  # noqa: BLE001 - viết lại câu hỏi lỗi: dùng câu hỏi gốc
+            record("rewrite", exc)
+            return QueryPlan(query, query)
 
     def retrieve(self, query: str) -> tuple[QueryPlan, list[Document]]:
         plan = self.plan(query)
         return plan, self.retriever.retrieve(plan, self.config.n_retrieved)
 
-    def run(self, query: str) -> RAGOutput:
-        plan, docs = self.retrieve(query)
-        examples = (
-            [
-                (e.query, e.answer)
-                for e in self.few_shot.select(
-                    plan,
-                    {d.id for d in docs[: self.config.context_k]}
-                    if self.config.few_shot_style_only
-                    else None,
-                )
-            ]
-            if self.few_shot
-            else None
-        )
+    def _examples(self, plan: QueryPlan, docs: list[Document]):
+        if not self.few_shot:
+            return None
+        style_only = self.config.few_shot_style_only
+        try:
+            chosen = self.few_shot.select(
+                plan, {d.id for d in docs[: self.config.context_k]} if style_only else None
+            )
+        except Exception as exc:  # noqa: BLE001 - không chọn được ví dụ: chạy không few-shot
+            record("few_shot", exc)
+            return None
+        return [(e.query, e.answer) for e in chosen]
+
+    def _answer(self, query: str, plan: QueryPlan, docs: list[Document]) -> str:
         messages = answer_messages(
-            query, plan.rewritten, docs[: self.config.context_k], self.config.prompt, examples
+            query,
+            plan.rewritten,
+            docs[: self.config.context_k],
+            self.config.prompt,
+            self._examples(plan, docs),
         )
-        answer = self.llm.chat(messages, model=self.llm_model)
-        self.last_trace = Trace(plan, docs)
-        return RAGOutput(answer=answer, retrieved_ids=[d.id for d in docs])
+        try:
+            answer = self.llm.chat(messages, model=self.llm_model)
+        except LLMUnavailable as exc:
+            record("generate", exc)
+            answer = ""
+        if not answer.strip():
+            record("generate", "không sinh được câu trả lời: trích đoạn đứng đầu")
+            return fallback_answer(docs)
+        return answer
+
+    def run(self, query: str) -> RAGOutput:
+        """Không bao giờ ném exception: lỗi ở bước nào thì bước đó dùng phương án dự phòng."""
+        start_incidents()
+        started = time.perf_counter()
+        plan, docs = QueryPlan(query, query), []
+        try:
+            plan, docs = self.retrieve(query)
+            answer = self._answer(query, plan, docs)
+        except Exception as exc:  # noqa: BLE001 - lưới an toàn cuối cùng
+            record("pipeline", exc)
+            answer = ""
+        ids = sanitize_ids([d.id for d in docs], self._valid_ids, self.config.n_retrieved)
+        if not ids:
+            record("retrieve", "không có id hợp lệ: dùng BM25 trên câu hỏi gốc")
+            docs = self._local_docs(query)
+            ids = sanitize_ids([d.id for d in docs], self._valid_ids, self.config.n_retrieved)
+        answer = clip_answer(answer) or fallback_answer(docs)
+        incidents = collect_incidents()
+        self.last_trace = Trace(plan, docs, incidents)
+        if self.config.log_path:
+            self._log(query, plan, answer, ids, incidents, started)
+        return RAGOutput(answer=answer, retrieved_ids=ids)
+
+    def _local_docs(self, query: str) -> list[Document]:
+        try:
+            return self.retriever.local_ranking(query, self.config.n_retrieved)
+        except Exception as exc:  # noqa: BLE001
+            record("local_ranking", exc)
+            return list(self.retriever.docs[: self.config.n_retrieved])
+
+    def _log(self, query, plan, answer, ids, incidents, started) -> None:
+        with contextlib.suppress(OSError):  # không ghi được log thì vẫn trả kết quả
+            append_log(
+                self.config.log_path,
+                {
+                    "query": query,
+                    "rewritten": plan.rewritten,
+                    "fallback_used": bool(incidents),
+                    "incidents": incidents,
+                    "abstained": is_abstention(answer),
+                    "answer_chars": len(answer),
+                    "n_ids": len(ids),
+                    "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                },
+            )

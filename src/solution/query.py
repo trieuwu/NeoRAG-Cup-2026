@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 
 from neorag.llm import LLMClient
+from solution.resilience import record
 
 # Khóa CLB chuẩn -> giá trị trường `club` trong data/corpus.jsonl
 CLUBS: dict[str, str] = {
@@ -107,7 +108,11 @@ def parse_plan(original: str, reply: str) -> QueryPlan:
     if not isinstance(data, dict):
         data = {}
     rewritten = data.get("query")
-    rewritten = rewritten.strip() if isinstance(rewritten, str) and rewritten.strip() else original
+    if isinstance(rewritten, str) and rewritten.strip():
+        rewritten = rewritten.strip()
+    else:
+        record("rewrite", "JSON hỏng hoặc thiếu trường query: dùng câu hỏi gốc")
+        rewritten = original
     clubs = [c for c in data.get("clubs") or [] if isinstance(c, str) and c in CLUBS]
     subs = [s.strip() for s in data.get("sub_queries") or [] if isinstance(s, str) and s.strip()]
     return QueryPlan(original, rewritten, list(dict.fromkeys(clubs)), subs[:3])
