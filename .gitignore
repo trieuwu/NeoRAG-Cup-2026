@@ -28,3 +28,13 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Vector database & Local cache mô hình
+chroma_db/
+faiss_index/
+models_cache/
+
+# Claude Code / Anthropic
+.claude/*
+!.claude/commands/
+!.claude/CLAUDE.md
