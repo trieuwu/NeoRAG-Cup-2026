@@ -109,8 +109,8 @@ Chỉ trả về JSON: {"ranking": [id, id, ...]} (tối đa 8 id), không giả
 class LLMReranker:
     """Rerank listwise bằng claude-haiku-5-5 qua gateway (cùng interface score() với CrossEncoderReranker).
 
-    Một lời gọi mỗi câu hỏi, cache bởi LLMClient. Điểm của đoạn = (số đoạn - vị trí) nếu được chọn, -1 nếu
-    không được chọn; pipeline gộp thứ hạng này với RRF như cross-encoder.
+    Một lời gọi mỗi câu hỏi, cache bởi LLMClient. Điểm của đoạn = (số đoạn - vị trí) nếu được chọn; đoạn
+    không có điểm; pipeline gộp thứ hạng này với RRF như cross-encoder (JSON lỗi -> giữ nguyên thứ hạng RRF).
     """
 
     def __init__(self, llm, model: str):
@@ -140,7 +140,9 @@ class LLMReranker:
             if isinstance(i, int | str) and str(i).isdigit() and int(i) in valid
         ]
         order = list(dict.fromkeys(order))
-        scores = {d.id: -1.0 for d in docs}
+        scores: dict[
+            int, float
+        ] = {}  # chỉ đoạn được chọn; đoạn không được chọn không có điểm rerank
         for pos, doc_id in enumerate(order):
             scores[doc_id] = float(len(docs) - pos)
         return scores

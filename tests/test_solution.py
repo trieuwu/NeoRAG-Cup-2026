@@ -73,7 +73,7 @@ def test_pipeline_uses_rewrite_and_club_boost(corpus):
     assert out.retrieved_ids[0] == 2
     assert sorted(out.retrieved_ids) == [1, 2, 3]
     assert out.answer.endswith("10/11/2012.")
-    assert len(llm.calls) == 2  # 1 lời gọi viết lại câu hỏi + 1 lời gọi sinh câu trả lời
+    assert len(llm.calls) == 3  # viết lại câu hỏi + rerank + sinh câu trả lời
 
 
 def test_pipeline_never_sends_temperature(corpus, monkeypatch):
@@ -244,12 +244,20 @@ def test_llm_reranker_parses_ranking_and_ignores_unknown_ids(corpus):
 
     llm = FakeLLM(lambda m: 'Kết quả: {"ranking": [3, 99, 1, 3]}')
     scores = LLMReranker(llm, "m").score(["GCC ra đời năm nào?"], corpus)
-    assert scores[3] > scores[1] > scores[2] == -1.0
+    assert scores[3] > scores[1] and 2 not in scores and 99 not in scores
     assert "temperature" not in str(llm.calls)
 
 
-def test_llm_reranker_bad_json_keeps_all_docs_unranked(corpus):
+def test_llm_reranker_bad_json_keeps_rrf_order(corpus):
     from solution.rerank import LLMReranker
+    from solution.retrieval import HybridRetriever, RetrievalConfig
 
-    scores = LLMReranker(FakeLLM(lambda m: "không hiểu"), "m").score(["q"], corpus)
-    assert set(scores.values()) == {-1.0}
+    assert LLMReranker(FakeLLM(lambda m: "không hiểu"), "m").score(["q"], corpus) == {}
+    plan = QueryPlan("gcc ra doi nam nao", "GCC ra đời năm nào")
+    base = HybridRetriever(FakeEmbedder(), RetrievalConfig(use_rerank=False))
+    base.index(corpus)
+    broken = HybridRetriever(
+        FakeEmbedder(), RetrievalConfig(use_rerank=True), LLMReranker(FakeLLM(lambda m: "?"), "m")
+    )
+    broken.index(corpus)
+    assert [d.id for d in broken.retrieve(plan)] == [d.id for d in base.retrieve(plan)]

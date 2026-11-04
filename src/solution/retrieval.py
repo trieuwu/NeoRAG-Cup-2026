@@ -159,7 +159,8 @@ class HybridRetriever:
         cfg = self.config
         head = ranked[: cfg.rerank_depth]
         ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
-        ce_ranking = [i for i in sorted(head, key=lambda i: (-ce[self.docs[i].id], i))]
+        scored = [i for i in head if self.docs[i].id in ce]  # LLM chỉ chấm đoạn được chọn
+        ce_ranking = sorted(scored, key=lambda i: (-ce[self.docs[i].id], i))
         fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
         return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
 
