@@ -32,7 +32,7 @@ class RetrievalConfig:
     use_rerank: bool = False  # rerank bằng cross-encoder local (solution.rerank)
     rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
     w_rerank: float = 2.0  # trọng số danh sách xếp hạng của cross-encoder khi gộp RRF lần hai
-    diversify_clubs: bool = False  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
+    diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
 
 
 def doc_repr(d: Document, metadata: bool = True) -> str:

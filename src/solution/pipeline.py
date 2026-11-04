@@ -42,7 +42,7 @@ def _apply_env(obj) -> None:
 @dataclass
 class PipelineConfig:
     rewrite: bool = True
-    prompt: str = "v2"  # "v2" | "baseline"
+    prompt: str = "v3"  # "v3" (v2 + few-shot) | "v2" | "baseline"
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
