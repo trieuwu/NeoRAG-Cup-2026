@@ -128,3 +128,38 @@ def test_few_shot_prompt_keeps_real_question_last(corpus):
     assert len(msgs) == 2 + 2 * len(FEW_SHOT)
     assert msgs[-1]["role"] == "user" and "câu hỏi thật" in msgs[-1]["content"]
     assert "TÀI LIỆU" in msgs[-1]["content"]
+
+
+def test_rewrite_prompt_v2_asks_one_sub_query_per_club():
+    from solution.query import REWRITE_PROMPTS
+
+    assert "TỪNG CLB" in REWRITE_PROMPTS["v2"] and "TỪNG CLB" not in REWRITE_PROMPTS["v1"]
+    llm = FakeLLM(lambda m: "{}")
+    from solution.query import QueryRewriter
+
+    QueryRewriter(llm, "m", "v2")("so sanh proptit va gcc")
+    assert llm.calls[0][0]["content"] == REWRITE_PROMPTS["v2"]
+
+
+def test_diversify_prefer_intro_picks_intro_doc():
+    from neorag.data import Document
+    from solution.retrieval import HybridRetriever, RetrievalConfig
+
+    docs = [
+        Document(1, "Cộng đồng S2B", "Giới thiệu chung", "S2B gồm 3 CLB."),
+        Document(2, "CLB Lập Trình PTIT", "Lịch sử", "Lịch sử ProPTIT."),
+        Document(3, "CLB Lập Trình PTIT", "Giới thiệu chung", "ProPTIT thành lập 2011."),
+        Document(4, "CLB Multimedia PTIT", "Giới thiệu chung", "MPC thành lập 2012."),
+    ]
+    retriever = HybridRetriever(FakeEmbedder(), RetrievalConfig(diversify_prefer_intro=True))
+    retriever.index(docs)
+    plan = QueryPlan("so sanh", "So sánh", clubs=["proptit", "multimedia"])
+    top = retriever._diversify(plan, [0, 1, 2, 3], k=2)[:2]
+    assert {docs[i].id for i in top} == {3, 4}
+
+
+def test_v4_prompt_uses_v4_system_and_few_shot(corpus):
+    from solution.prompts import ANSWER_SYSTEM_V4, FEW_SHOT, answer_messages
+
+    msgs = answer_messages("q", "q", corpus, "v4")
+    assert msgs[0]["content"] == ANSWER_SYSTEM_V4 and len(msgs) == 2 + 2 * len(FEW_SHOT)
