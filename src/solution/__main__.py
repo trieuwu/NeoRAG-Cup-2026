@@ -86,9 +86,13 @@ def bench(workers: int, only: list[str] | None) -> int:
         pipe.index(corpus)
         if use_rerank:
             if reranker is None:
-                from solution.rerank import CrossEncoderReranker
+                from solution.rerank import CrossEncoderReranker, LLMReranker
 
-                reranker = CrossEncoderReranker()
+                reranker = (
+                    LLMReranker(base.llm, base.llm_model)
+                    if cfg.retrieval.rerank_backend == "llm"
+                    else CrossEncoderReranker()
+                )
             cfg.retrieval.use_rerank, pipe.retriever.reranker = True, reranker
         totals, by_type = defaultdict(float), defaultdict(lambda: defaultdict(float))
         for q in queries:

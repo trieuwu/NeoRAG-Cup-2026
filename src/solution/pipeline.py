@@ -8,7 +8,7 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_CLUB_BOOST=0       tắt ưu tiên theo CLB
     RAG_PROMPT=baseline    dùng prompt của baseline
     RAG_CONTEXT_K=5        số đoạn đưa vào prompt
-    RAG_USE_RERANK=1       rerank bằng cross-encoder local (cần install.py --local)
+    RAG_USE_RERANK=1       rerank top-N (RAG_RERANK_BACKEND=llm: Haiku listwise; cross_encoder: local)
     RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
     RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
     RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
@@ -79,9 +79,14 @@ class SolutionPipeline(RAGPipeline):
         self.rewriter = QueryRewriter(self.llm, self.llm_model, self.config.rewrite_prompt)
         reranker = None
         if self.config.retrieval.use_rerank:
-            from solution.rerank import CrossEncoderReranker
+            if self.config.retrieval.rerank_backend == "llm":
+                from solution.rerank import LLMReranker
 
-            reranker = CrossEncoderReranker()
+                reranker = LLMReranker(self.llm, self.llm_model)
+            else:
+                from solution.rerank import CrossEncoderReranker
+
+                reranker = CrossEncoderReranker()
         self.retriever = HybridRetriever(self.embedder, self.config.retrieval, reranker)
         self.few_shot = None
         if self.config.dynamic_few_shot:
