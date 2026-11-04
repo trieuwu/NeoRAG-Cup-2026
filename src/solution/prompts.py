@@ -38,6 +38,45 @@ ANSWER_USER = """TÀI LIỆU:
 CÂU HỎI: {query}{rewritten}"""
 
 
+# Few-shot (prompt "v3"): 4 cặp hỏi-đáp lấy nguyên văn từ tập train (được phép theo quy định mục 1),
+# chọn theo 4 kiểu câu: trực tiếp, so sánh, nhiều đoạn, không có đáp án. Chỉ dạy văn phong và độ dài
+# của đáp án chuẩn (~120-200 ký tự), không kèm tài liệu để tiết kiệm token.
+FEW_SHOT: list[tuple[str, str]] = [
+    (  # train-0001, trực tiếp
+        "CLB Lập Trình PTIT được thành lập ngày nào và phương châm hoạt động là gì?",
+        'CLB Lập Trình PTIT (PROPTIT) được thành lập ngày 09/10/2011, với phương châm hoạt động "Chia sẻ để cùng nhau phát triển".',
+    ),
+    (  # train-0017, so sánh
+        "Trong 3 CLB thuộc S2B, CLB nào lâu đời nhất và CLB nào trẻ nhất?",
+        "CLB Lập Trình PTIT lâu đời nhất (thành lập ngày 09/10/2011), tiếp theo là CLB Multimedia PTIT (thành lập ngày 10/11/2012). CLB Nhà Sáng Tạo Game PTIT (GCC) trẻ nhất, ra đời năm 2023.",
+    ),
+    (  # train-0038, nhiều đoạn
+        "Đợt tuyển 2023 của GCC, phải qua những vòng nào thì mới được đi First Meeting?",
+        "Đợt tuyển năm 2023 của CLB Nhà Sáng Tạo Game PTIT (GCC) gồm vòng CV, vòng Phỏng vấn và vòng Training. First Meeting GCC 2023 dành cho các bạn đã vượt qua vòng CV và vòng Phỏng vấn để vào vòng Training.",
+    ),
+    (  # train-0103, không có đáp án
+        "Cộng đồng S2B có fanpage hay website riêng không, địa chỉ là gì?",
+        "Tài liệu không có thông tin về fanpage hay website riêng của cộng đồng S2B; tài liệu chỉ có kênh liên hệ riêng của từng CLB thành viên.",
+    ),
+]
+
+FEW_SHOT_INTRO = (
+    "Các ví dụ dưới đây chỉ minh họa VĂN PHONG và ĐỘ DÀI câu trả lời mong muốn. "
+    "Với câu hỏi thật, chỉ dùng thông tin trong TÀI LIỆU được cung cấp."
+)
+
+
+def few_shot_messages() -> list[dict]:
+    msgs: list[dict] = []
+    for i, (q, a) in enumerate(FEW_SHOT):
+        prefix = FEW_SHOT_INTRO + "\n\n" if i == 0 else ""
+        msgs += [
+            {"role": "user", "content": f"{prefix}CÂU HỎI (ví dụ): {q}"},
+            {"role": "assistant", "content": a},
+        ]
+    return msgs
+
+
 def format_context(docs: list[Document]) -> str:
     return "\n\n".join(f"[{i}] ({d.club} | {d.topic})\n{d.text}" for i, d in enumerate(docs, 1))
 
@@ -47,8 +86,10 @@ def answer_messages(query: str, rewritten: str, docs: list[Document], style: str
         context = "\n\n".join(d.text for d in docs)
         return [{"role": "user", "content": BASELINE_USER.format(context=context, query=query)}]
     hint = f"\n(Diễn giải câu hỏi: {rewritten})" if rewritten and rewritten != query else ""
+    shots = few_shot_messages() if style == "v3" else []
     return [
         {"role": "system", "content": ANSWER_SYSTEM},
+        *shots,
         {
             "role": "user",
             "content": ANSWER_USER.format(

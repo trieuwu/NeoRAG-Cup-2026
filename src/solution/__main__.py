@@ -29,6 +29,11 @@ ABLATIONS: dict[str, dict] = {
     "dense_only_rewrite": {"use_bm25": False},
     "bm25_only_rewrite": {"use_dense": False},
     "full": {},
+    # E2
+    "full_no_metadata": {"index_metadata": False},
+    "full+diversify": {"diversify_clubs": True},
+    "full+rerank": {"use_rerank": True},
+    "full+rerank+diversify": {"use_rerank": True, "diversify_clubs": True},
 }
 
 
@@ -60,12 +65,19 @@ def bench(workers: int, only: list[str] | None) -> int:
         )
 
     names = only or list(ABLATIONS)
+    reranker = None
     print(f"{'config':26}{'R@5':>8}{'MRR@5':>8}{'NDCG@5':>8}{'Retr.':>8}   ({len(queries)} câu)")
     for name in names:
         cfg = _config(ABLATIONS[name])
-        pipe = SolutionPipeline(cfg, llm=base.llm)
-        pipe.retriever.bm25, pipe.retriever.docs = base.retriever.bm25, base.retriever.docs
-        pipe.retriever.doc_vectors = base.retriever.doc_vectors
+        cfg.retrieval.use_rerank, use_rerank = False, cfg.retrieval.use_rerank
+        pipe = SolutionPipeline(cfg, llm=base.llm)  # embedding có cache: index lại gần như tức thì
+        pipe.index(corpus)
+        if use_rerank:
+            if reranker is None:
+                from solution.rerank import CrossEncoderReranker
+
+                reranker = CrossEncoderReranker()
+            cfg.retrieval.use_rerank, pipe.retriever.reranker = True, reranker
         totals, by_type = defaultdict(float), defaultdict(lambda: defaultdict(float))
         for q in queries:
             plan = plans[q.id] if cfg.rewrite else QueryPlan(q.query, q.query)
