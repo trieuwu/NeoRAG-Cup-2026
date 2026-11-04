@@ -163,3 +163,32 @@ def test_v4_prompt_uses_v4_system_and_few_shot(corpus):
 
     msgs = answer_messages("q", "q", corpus, "v4")
     assert msgs[0]["content"] == ANSWER_SYSTEM_V4 and len(msgs) == 2 + 2 * len(FEW_SHOT)
+
+
+def test_expand_abbreviations_handles_ptit_terms_and_phrases():
+    from solution.textproc import expand_abbreviations
+
+    out = expand_abbreviations(fold("clb pro sinh hoạt ở cs hđ, có cộng đrl ko"))
+    assert "co so ha dong" in out and "diem ren luyen" in out and "proptit" in out
+
+
+def test_ambiguous_unaccented_words_are_not_expanded():
+    from solution.textproc import ABBREVIATIONS
+
+    for word in ["ve", "nhan", "thi", "tc", "tin", "c", "btc", "dn"]:
+        assert word not in ABBREVIATIONS
+
+
+def test_rewrite_v3_has_disambiguation_and_advice_rules():
+    from solution.query import REWRITE_PROMPTS
+
+    v3 = REWRITE_PROMPTS["v3"]
+    assert "đứng lớp" in v3 and "nhắn" in v3 and "xin tư vấn" in v3 and "ICPC" in v3
+
+
+def test_v5_prompt_extends_v4(corpus):
+    from solution.prompts import ANSWER_SYSTEM_V4, ANSWER_SYSTEM_V5, answer_messages
+
+    assert ANSWER_SYSTEM_V5.startswith(ANSWER_SYSTEM_V4.split("8.")[0])
+    assert "KHÔNG hỏi" in ANSWER_SYSTEM_V5
+    assert answer_messages("q", "q", corpus, "v5")[0]["content"] == ANSWER_SYSTEM_V5
