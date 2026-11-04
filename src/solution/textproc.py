@@ -32,6 +32,51 @@ ABBREVIATIONS: dict[str, str] = {
     "pro": "proptit",
     "sk": "su kien",
     "multi": "multimedia",
+    # --- E5: từ điển PTIT/CLB (khóa ở dạng đã bỏ dấu, chỉ nạp từ đơn nghĩa) ---
+    # Cơ cấu ban
+    "btt": "ban truyen thong",
+    "bsk": "ban su kien",
+    "bdn": "ban doi ngoai",
+    "cm": "chuyen mon",
+    "nd": "noi dung",
+    "tcns": "tai chinh nhan su",
+    "bdh": "ban dieu hanh",
+    # Tuyển thành viên và sinh hoạt
+    "tvm": "thanh vien moi",
+    "ttv": "tuyen thanh vien",
+    "tnm": "thu nap moi",
+    "pv": "phong van",
+    "onl": "online",
+    "off": "offline",
+    "bg": "biggame big game",
+    "biggame": "big game",
+    "gen": "the he",
+    "cvht": "co van hoc tap",
+    # Ngành và học thuật
+    "attt": "an toan thong tin",
+    "cntt": "cong nghe thong tin",
+    "dtvt": "dien tu vien thong",
+    "vtvt": "dien tu vien thong",
+    "pt": "da phuong tien",
+    "oop": "lap trinh huong doi tuong",
+    "cdr": "chuan dau ra",
+    "dkmh": "dang ky mon hoc",
+    "drl": "diem ren luyen",
+    "cpp": "c",
+    # Địa điểm
+    "ttth": "trung tam thuc hanh",
+    # Cố ý KHÔNG nạp (đa nghĩa sau khi bỏ dấu): "tc" (tín chỉ / tài chính), "tin" (tín / tin nhắn),
+    # "c" (chị / ngôn ngữ C), "btc" (ban tổ chức / ban tài chính), "dn" (đối ngoại / doanh nghiệp),
+    # "ve", "nhan", "thi", "dung lop".
+    # "gsa", "gsb", "a2", "a3" là tên riêng: giữ nguyên, BM25 tự khớp nếu corpus có.
+}
+
+# Cụm nhiều từ (đã bỏ dấu) -> dạng đầy đủ. Khớp nguyên cụm, có ranh giới từ hai bên.
+PHRASE_ABBREVIATIONS: dict[str, str] = {
+    "cs hd": "co so ha dong",
+    "cs nt": "co so ngoc truc",
+    "ban tc": "ban tai chinh nhan su",
+    "ban tt": "ban truyen thong",
 }
 
 # Từ dừng (dạng bỏ dấu): xuất hiện khắp nơi, không giúp phân biệt đoạn văn.
@@ -52,7 +97,9 @@ def fold(text: str) -> str:
 
 def expand_abbreviations(folded: str) -> str:
     """Thêm dạng đầy đủ của các viết tắt có trong câu (giữ nguyên từ gốc)."""
-    extra = [ABBREVIATIONS[w] for w in folded.split() if w in ABBREVIATIONS]
+    padded = f" {folded} "
+    extra = [full for phrase, full in PHRASE_ABBREVIATIONS.items() if f" {phrase} " in padded]
+    extra += [ABBREVIATIONS[w] for w in folded.split() if w in ABBREVIATIONS]
     return " ".join([folded, *extra])
 
 
