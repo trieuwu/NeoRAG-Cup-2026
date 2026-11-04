@@ -20,6 +20,29 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 | E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | 78.21 | 69.25 | 69.10 | **73.61** (Retrieval 72.19 · Generation 75.04) | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Retrieval train 72 nhưng Public chỉ 42: đề Public khó hơn nhiều |
 | E1 | `fefa875` | **Hybrid + rewrite + prompt v2.** R: Haiku viết lại câu hỏi (thêm dấu, mở rộng viết tắt, nhận diện CLB, tách câu hỏi con) → BM25 bỏ dấu + dense bge-m3, gộp RRF, ưu tiên đúng CLB. G: prompt v2 (ngắn, chép nguyên số liệu, từ chối chuẩn), top-5 đoạn kèm [CLB \| chủ đề] | 91.33 | 83.57 | 82.11 | (nj) Retrieval **85.67** · SP 84.71 · ROUGE-L 57.36 | — | — | Retrieval +13.5, SP +12.9, ROUGE-L +15.4 so với E0. 2 lời gọi Haiku/câu. Chưa chấm judge, chưa nộp Public |
 | E2/E3 | `95b085d` | **+ đa dạng hóa CLB + few-shot.** R: như E1, thêm đa dạng hóa theo CLB (câu hỏi nhiều CLB → mỗi CLB ≥ 1 đoạn top-5); cross-encoder có trong code nhưng tắt (chưa đo xong). G: prompt v3 = v2 + 4 ví dụ few-shot từ train | 92.01 | 83.77 | 82.55 | (nj) Retrieval **86.11** · SP 87.32 · ROUGE-L 60.35 | **80.09** | — | Retrieval +0.4, SP +2.6, ROUGE-L +3.0 so với E1 trên train. **Public: Retrieval 82.19 (R@5 81.79 · MRR@5 87.18 · NDCG@5 77.61), Generation 77.98 (SP 85.04 · ROUGE-L 52.96 · Groundedness 92.31 · Relevancy 57.25 · 1−Noise 80.34 · Abstention 100).** +27.7 so với baseline Public, top 7 bảng xếp hạng. Điểm yếu nhất: ROUGE-L, Relevancy; câu trả lời Public trung vị 274 ký tự (đáp án chuẩn ~200) |
+| E4 | `f0f96b3` | **Rewrite v2 + prompt v4.** R: Haiku tách câu hỏi con cho TỪNG CLB khi câu hỏi nhiều CLB; đa dạng hóa viết lại (ưu tiên đoạn "Giới thiệu chung" có trong code nhưng tắt). G: prompt v4 = trả lời 1-2 câu, câu đầu nhắc chủ thể câu hỏi, đối chiếu từ đồng nghĩa nhưng trả lời bằng từ của tài liệu, + few-shot | 94.33 | 85.23 | 84.81 | (nj) Retrieval **88.12** · SP **88.81** · ROUGE-L **63.73** | chưa nộp | — | Retrieval +2.0, SP +1.5, ROUGE-L +3.4 so với E3. Câu trả lời Public trung vị 274 → 216 ký tự. File nộp: `outputs/public_test_submission.zip` (bản E3 giữ ở `public_test_submission_e3_80.09.zip`) |
+
+### Ablation E4 (train)
+
+| Cấu hình retrieval (`python -m solution bench`) | Rewrite v1 | Rewrite v2 |
+|---|---:|---:|
+| không đa dạng hóa | 85.67 | **88.20** |
+| đa dạng hóa (mặc định) | 86.11 | 88.12 |
+| đa dạng hóa + ưu tiên đoạn "Giới thiệu chung" | 85.71 | 87.70 |
+
+`w_dense_sub` 0.5 / 0.7 / 1.0 / 1.3 với rewrite v2: 88.27 / 88.12 / 88.24 / 88.15 (nhiễu, giữ 0.7).
+
+| Prompt (tập con 42 câu train, cùng retrieval E4) | String Presence | ROUGE-L | Độ dài trung vị |
+|---|---:|---:|---:|
+| v3 | 90.00 | 62.04 | 212 |
+| **v4** | 89.50 | **65.27** | 208 |
+
+Rút ra:
+- **Lỗi thật của câu so sánh nằm ở bước viết lại**, không ở bước đa dạng hóa: câu hỏi con chung chung ("CLB nào lâu
+  đời nhất?") không khớp đoạn chứa "thành lập ngày ..."; tách theo từng CLB với thông tin cụ thể thì +2.1.
+- Ép lấy đoạn "Giới thiệu chung" cho mọi câu nhiều CLB **làm giảm điểm** (−0.4): nhiều câu so sánh hỏi về tuyển
+  thành viên, đào tạo... chứ không phải thông tin tổng quan. Giữ công tắc nhưng tắt.
+- Chưa đo được Response Relevancy offline (cần judge); prompt v4 nhắm vào metric này qua quy tắc nhắc lại chủ thể.
 
 ### Public E2/E3: so với baseline
 
