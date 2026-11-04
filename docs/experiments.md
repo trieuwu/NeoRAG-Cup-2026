@@ -17,10 +17,29 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 
 | Run ID | Commit SHA | Mô tả phương pháp (Retrieval / Generation) | Recall@5 | MRR@5 | NDCG@5 | Score Train | Public Score | Cost ($) | Ghi chú rút ra |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | — | — | — | — | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Điểm yếu nhất: retrieval, ROUGE-L 33.11, 1−Noise 46.26 |
+| E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | 78.21 | 69.25 | 69.10 | (nj) Retrieval 72.19 · SP 71.81 · ROUGE-L 41.97 | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Retrieval train 72 nhưng Public chỉ 42: đề Public khó hơn nhiều |
 
 ## Ghi chú phân tích lỗi
 
 Ghi các phát hiện từ `per_query.jsonl` theo nhóm `type` câu hỏi (không dấu/viết tắt, so sánh, nhiều đoạn, không có đáp án...).
 
-- _(chưa có)_
+### E0, baseline trên train (`--no-judge`)
+
+| Loại câu hỏi | n | Recall@5 | MRR@5 | ROUGE-L | String Presence |
+|---|---:|---:|---:|---:|---:|
+| không dấu/viết tắt | 26 | **0.44** | **0.36** | 0.36 | **0.46** |
+| diễn đạt khác | 22 | 0.86 | 0.73 | 0.41 | 0.77 |
+| nhiều đoạn | 20 | 0.81 | 0.71 | 0.41 | 0.80 |
+| so sánh | 20 | 0.79 | 0.78 | 0.39 | 0.79 |
+| thời gian | 12 | 1.00 | 0.86 | 0.47 | 0.92 |
+| không có đáp án | 11 | 0.93 | 0.76 | – | – |
+| trực tiếp | 8 | 1.00 | 1.00 | 0.63 | 0.73 |
+| thiếu dữ liệu | 5 | 0.90 | 0.70 | 0.47 | 0.60 |
+| mâu thuẫn nguồn | 2 | 1.00 | 1.00 | 0.46 | 1.00 |
+
+- **Điểm nghẽn lớn nhất: câu không dấu/viết tắt** (Recall@5 0.44 so với ~0.85 ở các nhóm khác). `bge-m3` embed câu
+  không dấu kém. Đề Public có tỷ lệ loại câu này rất cao, nên Retrieval Public chỉ còn 42. Hướng xử lý: Haiku
+  khôi phục dấu và mở rộng viết tắt trước khi truy xuất, cộng BM25 trên văn bản đã bỏ dấu.
+- **Câu trả lời quá dài**: trung vị 428 ký tự, so với 196 ở đáp án chuẩn → ROUGE-L thấp (0.42). Hướng xử lý: prompt
+  yêu cầu trả lời ngắn, chép nguyên số liệu/tên riêng.
+- Latency trung vị 3.7 s/câu (chạy tuần tự).
