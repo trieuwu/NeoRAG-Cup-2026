@@ -237,3 +237,19 @@ def test_v6_prompt_uses_dynamic_examples(corpus):
     assert msgs[0]["content"] == ANSWER_SYSTEM_V6
     assert msgs[1]["content"].startswith(DYNAMIC_INTRO) and msgs[2]["content"] == "vd đáp"
     assert len(msgs) == 4 and "KHÍA CẠNH" in ANSWER_SYSTEM_V6
+
+
+def test_llm_reranker_parses_ranking_and_ignores_unknown_ids(corpus):
+    from solution.rerank import LLMReranker
+
+    llm = FakeLLM(lambda m: 'Kết quả: {"ranking": [3, 99, 1, 3]}')
+    scores = LLMReranker(llm, "m").score(["GCC ra đời năm nào?"], corpus)
+    assert scores[3] > scores[1] > scores[2] == -1.0
+    assert "temperature" not in str(llm.calls)
+
+
+def test_llm_reranker_bad_json_keeps_all_docs_unranked(corpus):
+    from solution.rerank import LLMReranker
+
+    scores = LLMReranker(FakeLLM(lambda m: "không hiểu"), "m").score(["q"], corpus)
+    assert set(scores.values()) == {-1.0}
