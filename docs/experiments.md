@@ -184,6 +184,43 @@ Rút ra:
 - Giảm trọng số dense cho câu gốc không dấu 0.5 → 0.2: +1.8. Các giá trị 0–0.3 chênh nhau ≤ 1 câu (nhiễu); chọn 0.2 để không overfit.
 - Nhóm không dấu/viết tắt: Recall@5 0.44 → 0.85.
 
+### E9 (nhánh `perf/van-phong-tra-loi`, commit `843957e`): cấu trúc Generation, TRƯỢT tiêu chí
+
+**Chẩn đoán trước khi thử (miễn phí, train E7 `--no-judge`, 115 câu có đáp án):**
+- Câu trả lời **không dài hơn** đáp án chuẩn: trung vị 184 so với 201 ký tự, 1.77 so với 1.71 câu. Trong 20 câu
+  ROUGE-L thấp nhất có Recall@5 = 1: đáp án chuẩn 45.8 âm tiết, E7 38.6.
+- Khác biệt ở khuôn câu: đáp án chuẩn mở đầu bằng nguồn/thời điểm ("Theo nội quy ...") 41.7% (E7 15.7%), nối mục
+  bằng `;` 29.6% (E7 0.9%); E7 thêm tên gọi trong ngoặc "(ProPTIT)" 40% (chuẩn 2.6%). Không bên nào dùng gạch đầu dòng.
+- Nhóm "thiếu dữ liệu" yếu nhất (ROUGE-L 0.47, SP 0.50): E7 chỉ từ chối, đáp án chuẩn nêu phần tài liệu có.
+- Relevancy (tập con 42 câu E7 có judge): nhóm có dấu 0.746, nhóm không dấu/viết tắt 0.530 → nhóm có dấu đã gần
+  trần paraphrase của bge-m3, phần thiếu chủ yếu do câu không dấu.
+
+**Thử nghiệm** (cùng retrieval E7; dynamic few-shot = 4 ví dụ train gần nhất, Leave-One-Out, bỏ ví dụ có đoạn đúng
+trùng các đoạn trong prompt):
+
+| Train 126 câu | E7 (v5 + few-shot tĩnh) | G1: v7 | G2: v5 + dynamic | G3: v7 + dynamic |
+|---|---:|---:|---:|---:|
+| String Presence | 88.67 | 90.55 | **92.25** | 92.17 |
+| ROUGE-L | 64.41 | 66.30 | 66.53 | **66.61** |
+| Groundedness | 99.57 | – | 97.39 | 97.54 |
+| Response Relevancy | 67.91 | – | **68.55** | 65.35 |
+| 1 − Noise | 96.23 | – | 94.93 | 96.52 |
+| Abstention | 100 | – | 100 | 90.91 |
+| **Điểm train (judge)** | **92.36** | – | 92.60 | 91.72 |
+| 4-gram trùng với ví dụ động (TB / số câu > 30%) | 8.7% / 4 | 7.4% / 2 | 9.4% / 3 | 8.0% / 2 |
+
+Tiêu chí giữ (đặt trước): ROUGE-L +2.0, SP không giảm, Groundedness và Abstention không giảm quá 1.
+- **G3 trượt**: Abstention −9.1 (train-0071: câu "Tài liệu chỉ ghi ... có Chủ nhiệm ..." bị coi là đưa thông tin như
+  câu trả lời), Groundedness −2.0, Relevancy −2.6 (mở đầu "Theo Phòng truyền thống ..." làm câu hỏi sinh ngược lệch).
+  Lỗi nằm ở prompt v7, không ở few-shot động.
+- **G2 trượt** ở Groundedness (−2.2, 5 câu từ 1.0 xuống 0.5); tổng điểm train +0.24, trong mức nhiễu của judge.
+- Không có dấu hiệu chép ví dụ (mức trùng 4-gram ngang E7, vốn không thấy ví dụ): bộ lọc "style-only" chặn được
+  lỗi của E6.
+- Kết luận: **giữ E7**. Prompt v7 giữ trong code làm tùy chọn (`RAG_PROMPT=v7`), không bật.
+
+Chi phí ước tính: 3 biến thể `--no-judge` ~380 lời gọi (~$0.1); judge đủ 126 câu cho E7 (84 câu chưa có cache), G2,
+G3 (~$0.5 theo giá niêm yết).
+
 ## Ghi chú phân tích lỗi
 
 Ghi các phát hiện từ `per_query.jsonl` theo nhóm `type` câu hỏi (không dấu/viết tắt, so sánh, nhiều đoạn, không có đáp án...).
