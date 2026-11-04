@@ -261,3 +261,12 @@ def test_llm_reranker_bad_json_keeps_rrf_order(corpus):
     )
     broken.index(corpus)
     assert [d.id for d in broken.retrieve(plan)] == [d.id for d in base.retrieve(plan)]
+
+
+def test_prompt_v7_drops_alias_rule_and_keeps_static_few_shot(corpus):
+    from solution.prompts import ANSWER_SYSTEM_V7, answer_messages
+
+    msgs = answer_messages("q", "q", corpus, "v7")
+    assert msgs[0]["content"] == ANSWER_SYSTEM_V7
+    assert "(ProPTIT)" not in ANSWER_SYSTEM_V7 and "Tài liệu chỉ ghi" in ANSWER_SYSTEM_V7
+    assert len(msgs) == 1 + 2 * 4 + 1  # system + 4 cặp few-shot tĩnh + câu hỏi

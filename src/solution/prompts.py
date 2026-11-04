@@ -70,6 +70,28 @@ ANSWER_SYSTEM_V6 = (
 )
 assert "KHÍA CẠNH" in ANSWER_SYSTEM_V6
 
+# v7 (giai đoạn A, nhánh G): chẩn đoán 3a trên train E7 (docs/experiments.md) cho thấy câu trả lời không dài hơn
+# đáp án chuẩn; khác biệt nằm ở khuôn câu: đáp án chuẩn hay mở đầu bằng nguồn/thời điểm ("Theo nội quy ..."),
+# nối nhiều mục bằng dấu chấm phẩy, không thêm tên gọi khác trong ngoặc, và với câu thiếu dữ liệu thì vẫn nêu
+# phần tài liệu có (câu trả lời không có câu nào kiểm chứng được bị tính Groundedness 0, Noise 1).
+ANSWER_SYSTEM_V7 = (
+    ANSWER_SYSTEM_V5.replace(
+        """7. Nếu TÀI LIỆU không có thông tin để trả lời, trả lời đúng một câu: "Tài liệu hiện có không có thông tin về <nội dung được hỏi>." và không đưa ra con số, tên hay quy định nào khác.""",
+        """7. Nếu TÀI LIỆU không có thông tin để trả lời điều được hỏi, câu đầu viết: "Tài liệu không có thông tin về <nội dung được hỏi>." Nếu TÀI LIỆU có thông tin liên quan trực tiếp tới đúng chủ thể được hỏi (ví dụ cùng nhiệm kỳ nhưng chức vụ khác, đợt tuyển của năm khác, tình trạng hiện tại), thêm một câu "Tài liệu chỉ ghi ..." nêu đúng thông tin đó. Không suy đoán và không đưa thông tin nào ra như thể đó là câu trả lời.""",
+    )
+    .replace(
+        """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.""",
+        """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin trước rồi nói ngắn gọn phần nào tài liệu không ghi.""",
+    )
+    .replace(
+        """11. Nếu người hỏi gọi CLB bằng tên viết tắt hoặc tên khác (ProPTIT, GCC, MPC, Multimedia), dùng tên đầy đủ kèm đúng tên đó trong ngoặc ở lần nhắc đầu tiên, ví dụ "CLB Lập Trình PTIT (ProPTIT)".""",
+        """11. Gọi CLB bằng tên đầy đủ như trong TÀI LIỆU: "CLB Lập Trình PTIT", "CLB Multimedia PTIT", "CLB Nhà Sáng Tạo Game PTIT (GCC)"; không thêm tên gọi khác trong ngoặc.
+12. Nếu thông tin được hỏi gắn với một nguồn hoặc thời điểm mà TÀI LIỆU ghi rõ (nội quy, Phòng truyền thống, website, bài đăng, lộ trình đào tạo hiện tại, thời điểm truy cập), mở đầu phần trả lời bằng "Theo <nguồn hoặc thời điểm>, ..." đúng như tài liệu ghi (đặt sau "Có."/"Không." nếu có).
+13. Khi nêu thông tin cho nhiều đối tượng (nhiều CLB, nhiều nhiệm kỳ, nhiều vòng) hoặc nhiều mục dài, viết "<đối tượng>: <thông tin>; <đối tượng>: <thông tin>." và nối các mục bằng dấu chấm phẩy.""",
+    )
+)
+assert "Theo <nguồn" in ANSWER_SYSTEM_V7 and "(ProPTIT)" not in ANSWER_SYSTEM_V7
+
 ANSWER_USER = """TÀI LIỆU:
 {context}
 
@@ -139,10 +161,13 @@ def answer_messages(
         context = "\n\n".join(d.text for d in docs)
         return [{"role": "user", "content": BASELINE_USER.format(context=context, query=query)}]
     hint = f"\n(Diễn giải câu hỏi: {rewritten})" if rewritten and rewritten != query else ""
-    shots = few_shot_messages(examples) if style in {"v3", "v4", "v5", "v6"} else []
-    system = {"v4": ANSWER_SYSTEM_V4, "v5": ANSWER_SYSTEM_V5, "v6": ANSWER_SYSTEM_V6}.get(
-        style, ANSWER_SYSTEM
-    )
+    shots = few_shot_messages(examples) if style in {"v3", "v4", "v5", "v6", "v7"} else []
+    system = {
+        "v4": ANSWER_SYSTEM_V4,
+        "v5": ANSWER_SYSTEM_V5,
+        "v6": ANSWER_SYSTEM_V6,
+        "v7": ANSWER_SYSTEM_V7,
+    }.get(style, ANSWER_SYSTEM)
     return [
         {"role": "system", "content": system},
         *shots,
