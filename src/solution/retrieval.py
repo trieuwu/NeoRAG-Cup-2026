@@ -29,9 +29,12 @@ class RetrievalConfig:
     club_boost: float = 1.0  # cộng club_boost / rrf_k cho đoạn thuộc CLB được hỏi
     depth: int = 30  # số đoạn mỗi danh sách đưa vào RRF
     index_metadata: bool = True  # ghép "CLB | chủ đề" vào đầu đoạn khi index BM25 và dense
-    use_rerank: bool = False  # rerank bằng cross-encoder local (solution.rerank)
+    use_rerank: bool = True  # E7: rerank Haiku listwise, bench train Retrieval 87.99 -> 98.80
+    rerank_backend: str = (
+        "llm"  # "llm" (Haiku listwise, qua gateway) | "cross_encoder" (local, cần torch)
+    )
     rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
-    w_rerank: float = 2.0  # trọng số danh sách xếp hạng của cross-encoder khi gộp RRF lần hai
+    w_rerank: float = 4.0  # trọng số thứ hạng của reranker khi gộp RRF lần hai (bench: 1 -> 95.8, 2 -> 98.0, 4 -> 98.8)
     diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
     diversify_prefer_intro: bool = False  # đại diện của mỗi CLB là đoạn "Giới thiệu chung" nếu có
     # E6: Synthetic Question Anchors (solution.anchors, data/solution/doc_anchors.jsonl)
@@ -156,7 +159,7 @@ class HybridRetriever:
         cfg = self.config
         head = ranked[: cfg.rerank_depth]
         ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
-        ce_ranking = sorted(head, key=lambda i: (-ce[self.docs[i].id], i))
+        ce_ranking = [i for i in sorted(head, key=lambda i: (-ce[self.docs[i].id], i))]
         fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
         return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
 
