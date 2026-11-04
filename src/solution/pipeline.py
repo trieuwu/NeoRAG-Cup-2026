@@ -42,8 +42,10 @@ def _apply_env(obj) -> None:
 @dataclass
 class PipelineConfig:
     rewrite: bool = True
-    rewrite_prompt: str = "v2"  # "v2" (tách câu hỏi con theo từng CLB) | "v1"
-    prompt: str = "v4"  # "v4" (ngắn, nhắc chủ thể, few-shot) | "v3" | "v2" | "baseline"
+    rewrite_prompt: str = "v3"  # "v3" (từ điển PTIT, phân giải chữ không dấu) | "v2" | "v1"
+    prompt: str = (
+        "v5"  # "v5" (v4 + bỏ câu phụ, dùng tên gọi của người hỏi) | "v4" | "v3" | "v2" | "baseline"
+    )
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
