@@ -47,6 +47,17 @@ Quy tắc trả lời:
 8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.
 9. Không chào hỏi, không mở đầu kiểu "Dựa vào tài liệu", không markdown, không gạch đầu dòng."""
 
+# v5 (sau phân tích Response Relevancy trên tập con 42 câu train, xem docs/experiments.md):
+# - Câu phụ không được hỏi ("Tài liệu không có thông tin về nhiệm kỳ sau ...") làm judge sinh câu hỏi lệch.
+# - Dùng thêm đúng tên gọi người hỏi dùng (ProPTIT, GCC, MPC) bên cạnh tên đầy đủ.
+ANSWER_SYSTEM_V5 = ANSWER_SYSTEM_V4.replace(
+    """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.""",
+    """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập. Không viết câu "tài liệu không có thông tin về ..." cho những điều câu hỏi KHÔNG hỏi.
+10. Mỗi câu trong câu trả lời phải trả lời trực tiếp một ý của câu hỏi; bỏ câu giải thích thêm, ví dụ thêm hay thông tin liền kề không được hỏi.
+11. Nếu người hỏi gọi CLB bằng tên viết tắt hoặc tên khác (ProPTIT, GCC, MPC, Multimedia), dùng tên đầy đủ kèm đúng tên đó trong ngoặc ở lần nhắc đầu tiên, ví dụ "CLB Lập Trình PTIT (ProPTIT)".""",
+)
+assert ANSWER_SYSTEM_V5 != ANSWER_SYSTEM_V4
+
 ANSWER_USER = """TÀI LIỆU:
 {context}
 
@@ -101,8 +112,8 @@ def answer_messages(query: str, rewritten: str, docs: list[Document], style: str
         context = "\n\n".join(d.text for d in docs)
         return [{"role": "user", "content": BASELINE_USER.format(context=context, query=query)}]
     hint = f"\n(Diễn giải câu hỏi: {rewritten})" if rewritten and rewritten != query else ""
-    shots = few_shot_messages() if style in {"v3", "v4"} else []
-    system = ANSWER_SYSTEM_V4 if style == "v4" else ANSWER_SYSTEM
+    shots = few_shot_messages() if style in {"v3", "v4", "v5"} else []
+    system = {"v4": ANSWER_SYSTEM_V4, "v5": ANSWER_SYSTEM_V5}.get(style, ANSWER_SYSTEM)
     return [
         {"role": "system", "content": system},
         *shots,
