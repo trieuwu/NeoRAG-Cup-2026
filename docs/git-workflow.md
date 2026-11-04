@@ -66,6 +66,6 @@ git push origin e1
 
 - `.env` (key cá nhân). Nếu lỡ commit: báo BTC thu hồi key ngay, xóa commit là chưa đủ.
 - `outputs/` (predictions: không chia sẻ giữa thí sinh), `.cache/`, `.venv/`.
-- Cấu hình cá nhân của Claude Code trong `.claude/` (chỉ `.claude/CLAUDE.md` và `.claude/commands/` được commit).
+- Thư mục công cụ cá nhân (`.claude/`, cấu hình editor) và ghi chú cá nhân (`STUDY_REPORT.md`).
 
 Không dùng `git push --force` lên `main`.

@@ -34,7 +34,8 @@ chroma_db/
 faiss_index/
 models_cache/
 
-# Claude Code / Anthropic
-.claude/*
-!.claude/commands/
-!.claude/CLAUDE.md
+# Công cụ cá nhân của người dùng (không thuộc dự án): bỏ qua toàn bộ
+.claude/
+
+# Ghi chú học tập cá nhân
+STUDY_REPORT.md
