@@ -46,7 +46,41 @@ REWRITE_SYSTEM_V2 = REWRITE_SYSTEM_V1.replace(
 """,
 )
 assert REWRITE_SYSTEM_V2 != REWRITE_SYSTEM_V1
-REWRITE_PROMPTS = {"v1": REWRITE_SYSTEM_V1, "v2": REWRITE_SYSTEM_V2}
+
+# v3 (E5): từ điển PTIT, luật phân giải chữ không dấu đa nghĩa theo ngữ cảnh, không gắn CLB cho câu hỏi
+# cấp Học viện, và chỉ tách câu hỏi con theo CLB khi thật sự SO SÁNH (không áp dụng cho câu xin tư vấn).
+REWRITE_SYSTEM_V3 = """Bạn chuẩn hóa câu hỏi của sinh viên gửi tới chatbot của cộng đồng S2B tại Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+S2B gồm 3 CLB:
+- proptit: CLB Lập Trình PTIT (PROPTIT, ProPTIT, "clb lập trình", "clb lt", "pro").
+- multimedia: CLB Multimedia PTIT (MPC, "mm", "multi", CLB Sáng tạo Đa phương tiện; hợp với sinh viên ngành Đa phương tiện - "dpt", "pt": thiết kế, vẽ, chụp ảnh, quay dựng, truyền thông).
+- gcc: CLB Nhà Sáng Tạo Game PTIT (GCC, Game Creators Club, "clb game", "clb làm game").
+- s2b: cộng đồng chung của cả 3 CLB (sự kiện chung, sinh nhật chung, quan hệ giữa các CLB).
+
+Từ viết tắt:
+- Chung: hv = Học viện, sv = sinh viên, tv = thành viên, tvm = thành viên mới, nk = nhiệm kỳ, bcn = ban chủ nhiệm, cn = chủ nhiệm, ko/k/kh = không, dc/đc = được, e = em, sn = sinh nhật, hd/hđ = hoạt động, ib = nhắn tin (inbox), onl = online, off = offline, ntn = như thế nào, j = gì.
+- Ban: btt / ban tt = ban truyền thông, bsk = ban sự kiện, bđn/bdn = ban đối ngoại, cm = chuyên môn, nd = nội dung, ban tc / tcns = ban tài chính nhân sự, bđh/bdh = ban điều hành.
+- Tuyển thành viên: ttv = tuyển thành viên, tnm = thu nạp mới, pv = phỏng vấn, cv = hồ sơ CV, gen = thế hệ (khóa tuyển), biggame/bg = sự kiện BigGame.
+- Học thuật: cvht = cố vấn học tập, attt = an toàn thông tin, cntt = công nghệ thông tin, đtvt/vtvt = điện tử viễn thông, oop = lập trình hướng đối tượng, cđr = chuẩn đầu ra, đkmh = đăng ký môn học, tc/tín = tín chỉ, đrl = điểm rèn luyện, cpp = C++.
+- Địa điểm: cs = cơ sở, cs hđ = cơ sở Hà Đông, cs nt = cơ sở Ngọc Trục, ttth = trung tâm thực hành; gsa, gsb, a2, a3 là tên nhà/phòng, giữ nguyên.
+
+Chữ không dấu nhiều nghĩa: chọn nghĩa theo các từ xung quanh.
+- "ve": đi với "quay", "chụp", "thiết kế", "tay", "hình" -> "vẽ"; đi với "hỏi", "biết", "nói", "thông tin" -> "về".
+- "nhan": đi với "tin", "ib", "hỏi", "page", "fanpage" -> "nhắn"; đi với "được", "thưởng", "quà", "đồ", "giải" -> "nhận".
+- "thi": đi với "cuối khóa", "giữa kỳ", "môn", "kiểm tra", hoặc "thi gì", "có thi không" -> "thi" (kiểm tra, cuộc thi); đứng nối hai vế câu, trước "nên", "vào", "phải", "có" -> "thì".
+- "dung lop" trong ngữ cảnh CLB -> "đứng lớp": người giảng dạy, người chủ trì buổi học (KHÔNG phải học viên).
+- "ban" trước tên ban (sự kiện, truyền thông, đối ngoại, chuyên môn...) -> "Ban"; "ban" + "đột xuất" / "việc" -> "bận".
+
+Nhiệm vụ (KHÔNG trả lời câu hỏi):
+1. "query": viết lại câu hỏi thành tiếng Việt có dấu đầy đủ, rõ ràng, mở rộng mọi viết tắt. Giữ nguyên mọi ý được hỏi và vai trò của người hỏi, không thêm ý mới. Chỉ ghi tên CLB khi câu hỏi nhắc tới CLB đó.
+2. "clubs": khóa các CLB mà câu hỏi nhắc tới, chọn trong ["proptit", "multimedia", "gcc", "s2b"]. Câu hỏi về cấp Học viện (ICPC PTIT, Khoa, Phòng Giáo vụ, chuẩn đầu ra, đăng ký môn học, điểm rèn luyện...) mà không nhắc CLB nào thì để []. Không tự gắn CLB mà người hỏi không nhắc tới.
+3. "sub_queries": nếu câu hỏi gồm nhiều ý, tách thành các câu hỏi con có dấu, mỗi câu một ý (tối đa 3). Câu hỏi một ý thì để [].
+   - Chỉ khi người hỏi SO SÁNH rõ ràng giữa các CLB (vd. "CLB nào lâu đời nhất", "X với Y khác nhau thế nào"), viết MỘT câu hỏi con cho TỪNG CLB, ghi rõ tên CLB và thông tin cụ thể cần tìm (vd. "CLB Lập Trình PTIT được thành lập khi nào?").
+   - Câu hỏi mở, xin tư vấn (vd. "học ngành Đa phương tiện thì nên vào CLB nào") thì GIỮ NGUYÊN câu hỏi chung, KHÔNG tách theo từng CLB, sub_queries = [], và "clubs" chỉ ghi CLB phù hợp rõ ràng theo mô tả ở trên (nếu không rõ thì []).
+
+Chỉ trả về một object JSON đúng dạng sau, không giải thích:
+{"query": "...", "clubs": ["..."], "sub_queries": ["..."]}"""
+
+REWRITE_PROMPTS = {"v1": REWRITE_SYSTEM_V1, "v2": REWRITE_SYSTEM_V2, "v3": REWRITE_SYSTEM_V3}
 
 _JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 

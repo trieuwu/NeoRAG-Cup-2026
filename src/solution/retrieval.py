@@ -29,11 +29,21 @@ class RetrievalConfig:
     club_boost: float = 1.0  # cộng club_boost / rrf_k cho đoạn thuộc CLB được hỏi
     depth: int = 30  # số đoạn mỗi danh sách đưa vào RRF
     index_metadata: bool = True  # ghép "CLB | chủ đề" vào đầu đoạn khi index BM25 và dense
-    use_rerank: bool = False  # rerank bằng cross-encoder local (solution.rerank)
+    use_rerank: bool = True  # E7: rerank Haiku listwise, bench train Retrieval 87.99 -> 98.80
+    rerank_backend: str = (
+        "llm"  # "llm" (Haiku listwise, qua gateway) | "cross_encoder" (local, cần torch)
+    )
     rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
-    w_rerank: float = 2.0  # trọng số danh sách xếp hạng của cross-encoder khi gộp RRF lần hai
+    w_rerank: float = 4.0  # trọng số thứ hạng của reranker khi gộp RRF lần hai (bench: 1 -> 95.8, 2 -> 98.0, 4 -> 98.8)
     diversify_clubs: bool = True  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
     diversify_prefer_intro: bool = False  # đại diện của mỗi CLB là đoạn "Giới thiệu chung" nếu có
+    # E6: Synthetic Question Anchors (solution.anchors, data/solution/doc_anchors.jsonl)
+    use_anchors: bool = False  # train +3.2 nhưng Public không tăng (E6) -> tắt mặc định
+    w_anchor_bm25: float = 1.5  # BM25 trên câu hỏi giả định + thực thể của mỗi đoạn
+    # Dense trên anchors (max cosine với từng câu hỏi giả định): bench cho thấy làm giảm điểm -> tắt.
+    w_anchor_dense: float = 0.0  # bản viết lại
+    w_anchor_dense_original: float = 0.0  # câu gốc
+    w_anchor_dense_sub: float = 0.0  # câu hỏi con
 
 
 def doc_repr(d: Document, metadata: bool = True) -> str:
@@ -61,6 +71,34 @@ class HybridRetriever:
         texts = [doc_repr(d, self.config.index_metadata) for d in corpus]
         self.bm25 = BM25([tokens(t) for t in texts])
         self.doc_vectors = self.embedder.embed(texts) if self.config.use_dense else None
+        self.anchor_bm25 = self.anchor_vectors = self.anchor_owner = None
+        if self.config.use_anchors:
+            self._index_anchors(corpus)
+
+    def _index_anchors(self, corpus: list[Document]) -> None:
+        from solution.anchors import load
+
+        anchors = load()
+        if not anchors:
+            raise FileNotFoundError(
+                "Chưa có data/solution/doc_anchors.jsonl: chạy python -m solution anchors"
+            )
+        per_doc = [anchors.get(d.id) for d in corpus]
+        self.anchor_bm25 = BM25([tokens(a.text()) if a else [] for a in per_doc])
+        questions, owner = [], []
+        for i, a in enumerate(per_doc):
+            for q in a.questions if a else []:
+                questions.append(q)
+                owner.append(i)
+        self.anchor_vectors = self.embedder.embed(questions)
+        self.anchor_owner = np.asarray(owner)
+
+    def _anchor_doc_scores(self, vec: np.ndarray) -> np.ndarray:
+        """Điểm của đoạn = max cosine giữa câu hỏi và các câu hỏi giả định của đoạn đó."""
+        sims = self.anchor_vectors @ vec
+        best = np.full(len(self.docs), -1.0, dtype=np.float32)
+        np.maximum.at(best, self.anchor_owner, sims)
+        return best
 
     def _top(self, scores: np.ndarray) -> list[int]:
         return [int(i) for i in np.argsort(-scores, kind="stable")[: self.config.depth]]
@@ -84,6 +122,20 @@ class HybridRetriever:
             q_vectors = self.embedder.embed(texts)
             for vec, w in zip(q_vectors, weights, strict=True):
                 out.append((self._top(self.doc_vectors @ vec), w))
+        if cfg.use_anchors and self.anchor_bm25 is not None:
+            bm25_query = " ".join(
+                [expand_abbreviations(fold(plan.original)), plan.rewritten, *plan.sub_queries]
+            )
+            out.append((self._top(self.anchor_bm25.scores(tokens(bm25_query))), cfg.w_anchor_bm25))
+            texts = [plan.rewritten, plan.original, *plan.sub_queries]
+            weights = [
+                cfg.w_anchor_dense,
+                cfg.w_anchor_dense_original,
+                *[cfg.w_anchor_dense_sub] * len(plan.sub_queries),
+            ]
+            for vec, w in zip(self.embedder.embed(texts), weights, strict=True):
+                if w:
+                    out.append((self._top(self._anchor_doc_scores(vec)), w))
         return out
 
     def retrieve(self, plan: QueryPlan, n: int = 10) -> list[Document]:
@@ -107,7 +159,8 @@ class HybridRetriever:
         cfg = self.config
         head = ranked[: cfg.rerank_depth]
         ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
-        ce_ranking = sorted(head, key=lambda i: (-ce[self.docs[i].id], i))
+        scored = [i for i in head if self.docs[i].id in ce]  # LLM chỉ chấm đoạn được chọn
+        ce_ranking = sorted(scored, key=lambda i: (-ce[self.docs[i].id], i))
         fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
         return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
 

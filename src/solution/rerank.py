@@ -97,3 +97,52 @@ class CrossEncoderReranker:
         for k, (_, d) in zip(keys, pairs, strict=True):
             best[d.id] = max(best.get(d.id, float("-inf")), cached[k])
         return best
+
+
+LLM_RERANK_SYSTEM = """Bạn xếp hạng tài liệu cho hệ thống hỏi đáp về cộng đồng S2B tại PTIT (CLB Lập Trình PTIT, CLB Multimedia PTIT, CLB Nhà Sáng Tạo Game PTIT).
+Cho một câu hỏi và các đoạn tài liệu có mã [id]. Chọn các đoạn chứa thông tin giúp trả lời câu hỏi và xếp
+đoạn liên quan nhất lên đầu. Đoạn phải đúng CLB, đúng đối tượng và đúng mốc thời gian được hỏi. Câu hỏi nhiều ý
+hoặc so sánh thì chọn đoạn cho TỪNG ý. Bỏ các đoạn không liên quan.
+Chỉ trả về JSON: {"ranking": [id, id, ...]} (tối đa 8 id), không giải thích."""
+
+
+class LLMReranker:
+    """Rerank listwise bằng claude-haiku-5-5 qua gateway (cùng interface score() với CrossEncoderReranker).
+
+    Một lời gọi mỗi câu hỏi, cache bởi LLMClient. Điểm của đoạn = (số đoạn - vị trí) nếu được chọn; đoạn
+    không có điểm; pipeline gộp thứ hạng này với RRF như cross-encoder (JSON lỗi -> giữ nguyên thứ hạng RRF).
+    """
+
+    def __init__(self, llm, model: str):
+        self.llm, self.model = llm, model
+
+    def score(self, queries: list[str], docs: list[Document]) -> dict[int, float]:
+        question = queries[0] + (
+            "\nCác ý cần tìm: " + " | ".join(queries[1:]) if len(queries) > 1 else ""
+        )
+        context = "\n\n".join(f"[{d.id}] ({d.club} | {d.topic})\n{d.text}" for d in docs)
+        reply = self.llm.chat(
+            [
+                {"role": "system", "content": LLM_RERANK_SYSTEM},
+                {"role": "user", "content": f"CÂU HỎI: {question}\n\nTÀI LIỆU:\n{context}"},
+            ],
+            model=self.model,
+        )
+        start, end = reply.find("{"), reply.rfind("}")
+        try:
+            ranking = json.loads(reply[start : end + 1]).get("ranking", []) if start >= 0 else []
+        except (json.JSONDecodeError, AttributeError):
+            ranking = []
+        valid = {d.id for d in docs}
+        order = [
+            int(i)
+            for i in ranking
+            if isinstance(i, int | str) and str(i).isdigit() and int(i) in valid
+        ]
+        order = list(dict.fromkeys(order))
+        scores: dict[
+            int, float
+        ] = {}  # chỉ đoạn được chọn; đoạn không được chọn không có điểm rerank
+        for pos, doc_id in enumerate(order):
+            scores[doc_id] = float(len(docs) - pos)
+        return scores

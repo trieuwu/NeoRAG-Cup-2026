@@ -8,8 +8,10 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_CLUB_BOOST=0       tắt ưu tiên theo CLB
     RAG_PROMPT=baseline    dùng prompt của baseline
     RAG_CONTEXT_K=5        số đoạn đưa vào prompt
-    RAG_USE_RERANK=1       rerank bằng cross-encoder local (cần install.py --local)
+    RAG_USE_RERANK=1       rerank top-N (RAG_RERANK_BACKEND=llm: Haiku listwise; cross_encoder: local)
     RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
+    RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
+    RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
 """
 
 from __future__ import annotations
@@ -42,9 +44,13 @@ def _apply_env(obj) -> None:
 @dataclass
 class PipelineConfig:
     rewrite: bool = True
-    rewrite_prompt: str = "v2"  # "v2" (tách câu hỏi con theo từng CLB) | "v1"
-    prompt: str = "v4"  # "v4" (ngắn, nhắc chủ thể, few-shot) | "v3" | "v2" | "baseline"
+    rewrite_prompt: str = "v3"  # "v3" (từ điển PTIT, phân giải chữ không dấu) | "v2" | "v1"
+    # "v6" (câu đầu đủ chủ thể + khía cạnh, ví dụ động) | "v5" | "v4" | "v3" | "v2" | "baseline"
+    prompt: str = "v5"  # E6 (v6 + few-shot động) thấp hơn trên Public -> giữ v5
     context_k: int = 5  # số đoạn đưa vào prompt sinh câu trả lời
+    dynamic_few_shot: bool = False  # E6: Public SP -3.8 -> tắt mặc định
+    few_shot_k: int = 4
+    few_shot_style_only: bool = True  # bỏ ví dụ có đoạn đúng trùng các đoạn trong prompt
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
@@ -73,10 +79,20 @@ class SolutionPipeline(RAGPipeline):
         self.rewriter = QueryRewriter(self.llm, self.llm_model, self.config.rewrite_prompt)
         reranker = None
         if self.config.retrieval.use_rerank:
-            from solution.rerank import CrossEncoderReranker
+            if self.config.retrieval.rerank_backend == "llm":
+                from solution.rerank import LLMReranker
 
-            reranker = CrossEncoderReranker()
+                reranker = LLMReranker(self.llm, self.llm_model)
+            else:
+                from solution.rerank import CrossEncoderReranker
+
+                reranker = CrossEncoderReranker()
         self.retriever = HybridRetriever(self.embedder, self.config.retrieval, reranker)
+        self.few_shot = None
+        if self.config.dynamic_few_shot:
+            from solution.fewshot import FewShotSelector
+
+            self.few_shot = FewShotSelector(self.embedder, k=self.config.few_shot_k)
         self.last_trace: Trace | None = None
 
     def index(self, corpus: list[Document]) -> None:
@@ -91,8 +107,21 @@ class SolutionPipeline(RAGPipeline):
 
     def run(self, query: str) -> RAGOutput:
         plan, docs = self.retrieve(query)
+        examples = (
+            [
+                (e.query, e.answer)
+                for e in self.few_shot.select(
+                    plan,
+                    {d.id for d in docs[: self.config.context_k]}
+                    if self.config.few_shot_style_only
+                    else None,
+                )
+            ]
+            if self.few_shot
+            else None
+        )
         messages = answer_messages(
-            query, plan.rewritten, docs[: self.config.context_k], self.config.prompt
+            query, plan.rewritten, docs[: self.config.context_k], self.config.prompt, examples
         )
         answer = self.llm.chat(messages, model=self.llm_model)
         self.last_trace = Trace(plan, docs)

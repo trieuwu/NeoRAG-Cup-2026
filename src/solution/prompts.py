@@ -47,6 +47,29 @@ Quy tắc trả lời:
 8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.
 9. Không chào hỏi, không mở đầu kiểu "Dựa vào tài liệu", không markdown, không gạch đầu dòng."""
 
+# v5 (sau phân tích Response Relevancy trên tập con 42 câu train, xem docs/experiments.md):
+# - Câu phụ không được hỏi ("Tài liệu không có thông tin về nhiệm kỳ sau ...") làm judge sinh câu hỏi lệch.
+# - Dùng thêm đúng tên gọi người hỏi dùng (ProPTIT, GCC, MPC) bên cạnh tên đầy đủ.
+ANSWER_SYSTEM_V5 = ANSWER_SYSTEM_V4.replace(
+    """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập.""",
+    """8. Nếu chỉ trả lời được một phần, trả lời phần có thông tin rồi nói ngắn gọn phần nào tài liệu không đề cập. Không viết câu "tài liệu không có thông tin về ..." cho những điều câu hỏi KHÔNG hỏi.
+10. Mỗi câu trong câu trả lời phải trả lời trực tiếp một ý của câu hỏi; bỏ câu giải thích thêm, ví dụ thêm hay thông tin liền kề không được hỏi.
+11. Nếu người hỏi gọi CLB bằng tên viết tắt hoặc tên khác (ProPTIT, GCC, MPC, Multimedia), dùng tên đầy đủ kèm đúng tên đó trong ngoặc ở lần nhắc đầu tiên, ví dụ "CLB Lập Trình PTIT (ProPTIT)".""",
+)
+assert ANSWER_SYSTEM_V5 != ANSWER_SYSTEM_V4
+
+# v6 (E6): câu đầu chứa đủ chủ thể VÀ khía cạnh được hỏi (Response Relevancy: judge sinh ngược câu hỏi từ
+# câu trả lời), và quy tắc cho ví dụ động: học văn phong, không lấy thông tin từ ví dụ.
+ANSWER_SYSTEM_V6 = (
+    ANSWER_SYSTEM_V5.replace(
+        """3. Câu đầu tiên trả lời thẳng vào câu hỏi và nhắc lại chủ thể của câu hỏi bằng tên đầy đủ (ví dụ "CLB Multimedia PTIT có ...", "Vòng Training của CLB Lập Trình PTIT kéo dài ..."). Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không.".""",
+        """3. Câu đầu tiên trả lời thẳng vào câu hỏi và chứa đủ CHỦ THỂ (tên đầy đủ của CLB, ban, sự kiện, đợt, nhiệm kỳ) và KHÍA CẠNH được hỏi, dùng lại từ khóa của câu hỏi (ví dụ hỏi "bao lâu" thì có "kéo dài ...", hỏi "ai" thì có "là ..."), rồi nêu đáp án. Ví dụ: "Vòng Training của CLB Lập Trình PTIT kéo dài ...". Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không." rồi nêu chủ thể.""",
+    )
+    + """
+12. Các VÍ DỤ (nếu có) là hỏi-đáp mẫu để bắt chước độ dài, cách mở đầu và nhịp câu. TUYỆT ĐỐI không lấy thông tin từ ví dụ; mọi thông tin chỉ lấy từ TÀI LIỆU của câu hỏi thật."""
+)
+assert "KHÍA CẠNH" in ANSWER_SYSTEM_V6
+
 ANSWER_USER = """TÀI LIỆU:
 {context}
 
@@ -81,10 +104,18 @@ FEW_SHOT_INTRO = (
 )
 
 
-def few_shot_messages() -> list[dict]:
+DYNAMIC_INTRO = (
+    "Các ví dụ dưới đây là hỏi-đáp mẫu có dạng câu hỏi gần giống câu hỏi thật. Chỉ bắt chước VĂN PHONG, "
+    "ĐỘ DÀI và CÁCH MỞ ĐẦU; không dùng thông tin trong ví dụ."
+)
+
+
+def few_shot_messages(pairs: list[tuple[str, str]] | None = None) -> list[dict]:
+    """pairs=None: few-shot tĩnh (FEW_SHOT). pairs: ví dụ động từ solution.fewshot."""
+    intro = FEW_SHOT_INTRO if pairs is None else DYNAMIC_INTRO
     msgs: list[dict] = []
-    for i, (q, a) in enumerate(FEW_SHOT):
-        prefix = FEW_SHOT_INTRO + "\n\n" if i == 0 else ""
+    for i, (q, a) in enumerate(FEW_SHOT if pairs is None else pairs):
+        prefix = intro + "\n\n" if i == 0 else ""
         msgs += [
             {"role": "user", "content": f"{prefix}CÂU HỎI (ví dụ): {q}"},
             {"role": "assistant", "content": a},
@@ -96,13 +127,22 @@ def format_context(docs: list[Document]) -> str:
     return "\n\n".join(f"[{i}] ({d.club} | {d.topic})\n{d.text}" for i, d in enumerate(docs, 1))
 
 
-def answer_messages(query: str, rewritten: str, docs: list[Document], style: str) -> list[dict]:
+def answer_messages(
+    query: str,
+    rewritten: str,
+    docs: list[Document],
+    style: str,
+    examples: list[tuple[str, str]] | None = None,
+) -> list[dict]:
+    """examples: ví dụ few-shot động; None thì dùng few-shot tĩnh (với v3-v6)."""
     if style == "baseline":
         context = "\n\n".join(d.text for d in docs)
         return [{"role": "user", "content": BASELINE_USER.format(context=context, query=query)}]
     hint = f"\n(Diễn giải câu hỏi: {rewritten})" if rewritten and rewritten != query else ""
-    shots = few_shot_messages() if style in {"v3", "v4"} else []
-    system = ANSWER_SYSTEM_V4 if style == "v4" else ANSWER_SYSTEM
+    shots = few_shot_messages(examples) if style in {"v3", "v4", "v5", "v6"} else []
+    system = {"v4": ANSWER_SYSTEM_V4, "v5": ANSWER_SYSTEM_V5, "v6": ANSWER_SYSTEM_V6}.get(
+        style, ANSWER_SYSTEM
+    )
     return [
         {"role": "system", "content": system},
         *shots,
