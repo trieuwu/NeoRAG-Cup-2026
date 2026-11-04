@@ -19,6 +19,24 @@ thực sự có tác dụng. Đây là nguồn số liệu cho phần trình bà
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | E0 | `9916ad6` | **Baseline BTC.** R: dense `bge-m3`, embed nguyên đoạn, cosine top-10. G: 1 lời gọi `claude-haiku-5-5`, top-5 đoạn, prompt tối giản | 78.21 | 69.25 | 69.10 | **73.61** (Retrieval 72.19 · Generation 75.04) | 52.40 | — | Số Public lấy từ log mẫu của BTC (Retrieval 42.31, Generation 62.48; R@5 43.45, MRR@5 44.21, NDCG@5 39.29). Ngưỡng xếp hạng 53.40. Retrieval train 72 nhưng Public chỉ 42: đề Public khó hơn nhiều |
 | E1 | `fefa875` | **Hybrid + rewrite + prompt v2.** R: Haiku viết lại câu hỏi (thêm dấu, mở rộng viết tắt, nhận diện CLB, tách câu hỏi con) → BM25 bỏ dấu + dense bge-m3, gộp RRF, ưu tiên đúng CLB. G: prompt v2 (ngắn, chép nguyên số liệu, từ chối chuẩn), top-5 đoạn kèm [CLB \| chủ đề] | 91.33 | 83.57 | 82.11 | (nj) Retrieval **85.67** · SP 84.71 · ROUGE-L 57.36 | — | — | Retrieval +13.5, SP +12.9, ROUGE-L +15.4 so với E0. 2 lời gọi Haiku/câu. Chưa chấm judge, chưa nộp Public |
+| E2/E3 | `95b085d` | **+ đa dạng hóa CLB + few-shot.** R: như E1, thêm đa dạng hóa theo CLB (câu hỏi nhiều CLB → mỗi CLB ≥ 1 đoạn top-5); cross-encoder có trong code nhưng tắt (chưa đo xong). G: prompt v3 = v2 + 4 ví dụ few-shot từ train | 92.01 | 83.77 | 82.55 | (nj) Retrieval **86.11** · SP 87.32 · ROUGE-L 60.35 | — | — | Retrieval +0.4, SP +2.6, ROUGE-L +3.0 so với E1. SP/ROUGE-L của 4 câu few-shot hơi lạc quan vì chúng nằm trong train |
+
+### Ablation retrieval E2 (`python -m solution bench`, train, 122 câu)
+
+| Cấu hình | Recall@5 | MRR@5 | NDCG@5 | Retrieval |
+|---|---:|---:|---:|---:|
+| full E1 | 91.33 | 83.57 | 82.11 | 85.67 |
+| full E1, **không** ghép metadata vào đoạn | 88.59 | 80.68 | 79.01 | 82.76 |
+| **full + đa dạng hóa CLB (mặc định E2)** | **92.01** | **83.77** | **82.55** | **86.11** |
+| full + cross-encoder rerank | chưa đo | | | |
+
+Rút ra:
+- **Ghép "CLB | chủ đề" vào đoạn khi index đáng giá +2.9**: giữ.
+- Đa dạng hóa CLB: +0.4 (tác dụng ở câu so sánh nhiều CLB).
+- Cross-encoder `BAAI/bge-reranker-v2-m3` chưa có số liệu: lần chạy bench bị dừng vì máy thiếu RAM
+  (torch không thấy GPU trong môi trường chạy nên chạy CPU). Điểm đã tính được cache trong `.cache/rerank.sqlite`.
+- 18/122 câu E1 còn đoạn đúng ngoài top-5, chủ yếu là câu **nhiều đoạn / so sánh** (vd. "CLB nào lâu đời nhất và
+  trẻ nhất?" cần đoạn giới thiệu của cả 3 CLB). Đây là chỗ reranker và đa dạng hóa nhắm tới.
 
 ### Ablation retrieval E1 (`python -m solution bench`, train, 122 câu có doc đúng)
 
