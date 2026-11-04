@@ -37,6 +37,15 @@ ABLATIONS: dict[str, dict] = {
     # E4
     "diversify_off": {"diversify_clubs": False},
     "diversify+intro": {"diversify_prefer_intro": True},
+    # E6
+    "anchors": {"use_anchors": True},
+    "anchors_bm25_only": {
+        "use_anchors": True,
+        "w_anchor_dense": 0.0,
+        "w_anchor_dense_original": 0.0,
+        "w_anchor_dense_sub": 0.0,
+    },
+    "anchors_dense_only": {"use_anchors": True, "w_anchor_bm25": 0.0},
 }
 
 
@@ -116,18 +125,39 @@ def warm(split: str, workers: int) -> int:
     return 0
 
 
+def build_anchors() -> int:
+    import os
+
+    from neorag.llm import LLMClient
+    from solution import anchors
+
+    res = anchors.generate(
+        load_corpus(),
+        LLMClient(cache_path=".cache/solution.sqlite"),
+        os.getenv("LLM_MODEL", "claude-haiku-5-5"),
+    )
+    anchors.save(res)
+    print(f"Đã ghi {len(res)} đoạn vào {anchors.ANCHORS_PATH}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m solution")
     sub = parser.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("bench", help="ablation retrieval trên train")
     b.add_argument("--only", nargs="*", choices=list(ABLATIONS))
     b.add_argument("--workers", type=int, default=6)
+    sub.add_parser(
+        "anchors", help="sinh câu hỏi giả định cho từng đoạn (data/solution/doc_anchors.jsonl)"
+    )
     w = sub.add_parser("warm", help="chạy pipeline song song để làm nóng cache")
     w.add_argument("split")
     w.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     if args.cmd == "bench":
         return bench(args.workers, args.only)
+    if args.cmd == "anchors":
+        return build_anchors()
     return warm(args.split, args.workers)
 
 
