@@ -8,6 +8,8 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_CLUB_BOOST=0       tắt ưu tiên theo CLB
     RAG_PROMPT=baseline    dùng prompt của baseline
     RAG_CONTEXT_K=5        số đoạn đưa vào prompt
+    RAG_USE_RERANK=1       rerank bằng cross-encoder local (cần install.py --local)
+    RAG_DIVERSIFY_CLUBS=1  câu hỏi nhiều CLB: mỗi CLB có >= 1 đoạn trong top-5
 """
 
 from __future__ import annotations
@@ -68,7 +70,12 @@ class SolutionPipeline(RAGPipeline):
         self.llm = llm or LLMClient(cache_path=".cache/solution.sqlite")
         self.embedder = GatewayEmbedder(self.llm, os.getenv("EMBEDDING_MODEL", "bge-m3"))
         self.rewriter = QueryRewriter(self.llm, self.llm_model)
-        self.retriever = HybridRetriever(self.embedder, self.config.retrieval)
+        reranker = None
+        if self.config.retrieval.use_rerank:
+            from solution.rerank import CrossEncoderReranker
+
+            reranker = CrossEncoderReranker()
+        self.retriever = HybridRetriever(self.embedder, self.config.retrieval, reranker)
         self.last_trace: Trace | None = None
 
     def index(self, corpus: list[Document]) -> None:

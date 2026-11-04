@@ -13,7 +13,7 @@ import numpy as np
 
 from neorag.data import Document
 from solution.bm25 import BM25
-from solution.query import QueryPlan
+from solution.query import CLUBS, QueryPlan
 from solution.textproc import expand_abbreviations, fold, tokens
 
 
@@ -28,11 +28,16 @@ class RetrievalConfig:
     w_dense_sub: float = 0.7
     club_boost: float = 1.0  # cộng club_boost / rrf_k cho đoạn thuộc CLB được hỏi
     depth: int = 30  # số đoạn mỗi danh sách đưa vào RRF
+    index_metadata: bool = True  # ghép "CLB | chủ đề" vào đầu đoạn khi index BM25 và dense
+    use_rerank: bool = False  # rerank bằng cross-encoder local (solution.rerank)
+    rerank_depth: int = 20  # số ứng viên từ RRF đưa vào cross-encoder
+    w_rerank: float = 2.0  # trọng số danh sách xếp hạng của cross-encoder khi gộp RRF lần hai
+    diversify_clubs: bool = False  # câu hỏi nhiều CLB: đảm bảo mỗi CLB có >= 1 đoạn trong top-5
 
 
-def doc_repr(d: Document) -> str:
+def doc_repr(d: Document, metadata: bool = True) -> str:
     """Văn bản đại diện của đoạn khi index: thêm CLB và chủ đề làm ngữ cảnh."""
-    return f"{d.club} | {d.topic}\n{d.text}"
+    return f"{d.club} | {d.topic}\n{d.text}" if metadata else d.text
 
 
 def rrf(rankings: list[tuple[list[int], float]], k: int) -> dict[int, float]:
@@ -45,13 +50,14 @@ def rrf(rankings: list[tuple[list[int], float]], k: int) -> dict[int, float]:
 
 
 class HybridRetriever:
-    def __init__(self, embedder, config: RetrievalConfig | None = None):
+    def __init__(self, embedder, config: RetrievalConfig | None = None, reranker=None):
         self.embedder = embedder
         self.config = config or RetrievalConfig()
+        self.reranker = reranker  # CrossEncoderReranker, chỉ dùng khi config.use_rerank
 
     def index(self, corpus: list[Document]) -> None:
         self.docs = corpus
-        texts = [doc_repr(d) for d in corpus]
+        texts = [doc_repr(d, self.config.index_metadata) for d in corpus]
         self.bm25 = BM25([tokens(t) for t in texts])
         self.doc_vectors = self.embedder.embed(texts) if self.config.use_dense else None
 
@@ -89,4 +95,45 @@ class HybridRetriever:
                 if self.docs[idx].club in targets:
                     scores[idx] += cfg.club_boost / cfg.rrf_k
         ranked = sorted(scores, key=lambda i: (-scores[i], i))
+        if cfg.use_rerank and self.reranker is not None:
+            ranked = self._rerank(plan, ranked, scores)
+        if cfg.diversify_clubs:
+            ranked = self._diversify(plan, ranked)
         return [self.docs[i] for i in ranked[:n]]
+
+    def _rerank(self, plan: QueryPlan, ranked: list[int], scores: dict[int, float]) -> list[int]:
+        """Gộp lần hai: thứ hạng RRF + thứ hạng cross-encoder (trọng số w_rerank) trên top-N."""
+        cfg = self.config
+        head = ranked[: cfg.rerank_depth]
+        ce = self.reranker.score([plan.rewritten, *plan.sub_queries], [self.docs[i] for i in head])
+        ce_ranking = sorted(head, key=lambda i: (-ce[self.docs[i].id], i))
+        fused = rrf([(head, 1.0), (ce_ranking, cfg.w_rerank)], cfg.rrf_k)
+        return sorted(head, key=lambda i: (-fused[i], i)) + ranked[cfg.rerank_depth :]
+
+    def _diversify(self, plan: QueryPlan, ranked: list[int], k: int = 5) -> list[int]:
+        """Câu hỏi về >= 2 CLB: đưa đoạn tốt nhất của CLB còn thiếu vào top-k."""
+        clubs = [CLUBS[c] for c in plan.clubs if c != "s2b"]
+        if len(clubs) < 2:
+            return ranked
+        top = ranked[:k]
+        for club in clubs:
+            if any(self.docs[i].club == club for i in top):
+                continue
+            best = next((i for i in ranked[k:] if self.docs[i].club == club), None)
+            if best is None:
+                continue
+            # thay đoạn cuối top-k thuộc CLB đã có nhiều hơn 1 đoạn
+            counts = {c: sum(self.docs[i].club == c for i in top) for c in clubs}
+            victim = next(
+                (
+                    i
+                    for i in reversed(top)
+                    if counts.get(self.docs[i].club, 0) > 1 or self.docs[i].club not in clubs
+                ),
+                None,
+            )
+            if victim is None:
+                continue
+            top[top.index(victim)] = best
+        rest = [i for i in ranked if i not in top]
+        return top + rest
