@@ -103,7 +103,7 @@ LLM_RERANK_SYSTEM = """Bạn xếp hạng tài liệu cho hệ thống hỏi đ�
 Cho một câu hỏi và các đoạn tài liệu có mã [id]. Chọn các đoạn chứa thông tin giúp trả lời câu hỏi và xếp
 đoạn liên quan nhất lên đầu. Đoạn phải đúng CLB, đúng đối tượng và đúng mốc thời gian được hỏi. Câu hỏi nhiều ý
 hoặc so sánh thì chọn đoạn cho TỪNG ý. Bỏ các đoạn không liên quan.
-Chỉ trả về JSON: {"ranking": [id, id, ...]} (tối đa 8 id), không giải thích."""
+Chỉ trả về JSON: {"ranking": [id, id, ...]} (tối đa {max_ids} id), không giải thích."""
 
 
 class LLMReranker:
@@ -113,8 +113,10 @@ class LLMReranker:
     không có điểm; pipeline gộp thứ hạng này với RRF như cross-encoder (JSON lỗi -> giữ nguyên thứ hạng RRF).
     """
 
-    def __init__(self, llm, model: str):
-        self.llm, self.model = llm, model
+    def __init__(self, llm, model: str, max_ids: int = 8):
+        self.llm, self.model, self.max_ids = llm, model, max_ids
+        # Giữ nguyên văn bản prompt của E7 khi max_ids = 8 để dùng lại cache.
+        self.system = LLM_RERANK_SYSTEM.replace("{max_ids}", str(max_ids))
 
     def score(self, queries: list[str], docs: list[Document]) -> dict[int, float]:
         question = queries[0] + (
@@ -123,7 +125,7 @@ class LLMReranker:
         context = "\n\n".join(f"[{d.id}] ({d.club} | {d.topic})\n{d.text}" for d in docs)
         reply = self.llm.chat(
             [
-                {"role": "system", "content": LLM_RERANK_SYSTEM},
+                {"role": "system", "content": self.system},
                 {"role": "user", "content": f"CÂU HỎI: {question}\n\nTÀI LIỆU:\n{context}"},
             ],
             model=self.model,
