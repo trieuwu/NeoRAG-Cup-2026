@@ -54,7 +54,10 @@ Hệ quả cho thiết kế:
 ## Lệnh
 
 ```bash
-neorag run train --no-judge                                   # vòng lặp thử nghiệm chính
+python -m solution bench                                      # ablation retrieval, gần như miễn phí
+python -m solution warm train                                 # chạy song song 6 luồng để làm nóng cache
+neorag run train --no-judge --pipeline solution.pipeline:SolutionPipeline   # pipeline của thí sinh
+neorag run train --no-judge                                   # baseline (mốc đối chứng)
 neorag run train --pipeline my_solution.pipeline:MyPipeline   # chạy pipeline riêng
 neorag run public_test                                        # tạo outputs/public_test_submission.zip
 neorag validate public_test --predictions <file>
@@ -66,7 +69,10 @@ Phân tích lỗi: `outputs/eval_<tên>/per_query.jsonl`, nhóm theo trường `
 
 ## Quy ước làm việc
 
-- Pipeline mới kế thừa `neorag.pipelines.RAGPipeline` (`prepare`/`index`/`run`); không sửa baseline để giữ mốc đối chứng.
+- Code thí sinh nằm trong `src/solution/` (query.py → retrieval.py → prompts.py → pipeline.py), kế thừa
+  `neorag.pipelines.RAGPipeline`. Không sửa `src/neorag/` (code BTC) và baseline để giữ mốc đối chứng.
+- Tham số pipeline chỉnh qua biến môi trường `RAG_*` (xem docstring `src/solution/pipeline.py`).
+- Danh sách phương án và trạng thái: `docs/strategy.md`. Quy trình Git: `docs/git-workflow.md`.
 - Mỗi thực nghiệm ghi một dòng vào `docs/experiments.md` (Run ID, commit SHA, metric, chi phí, rút ra).
 - Git: Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`), mỗi commit một thay đổi logic.
 - Không `git push` khi chưa được người dùng yêu cầu.
