@@ -20,7 +20,7 @@ CLUBS: dict[str, str] = {
     "s2b": "Cộng đồng S2B",
 }
 
-REWRITE_SYSTEM = """Bạn chuẩn hóa câu hỏi của sinh viên gửi tới chatbot của cộng đồng S2B tại Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+REWRITE_SYSTEM_V1 = """Bạn chuẩn hóa câu hỏi của sinh viên gửi tới chatbot của cộng đồng S2B tại Học viện Công nghệ Bưu chính Viễn thông (PTIT).
 S2B gồm 3 CLB:
 - proptit: CLB Lập Trình PTIT (PROPTIT, ProPTIT, "clb lập trình", "clb lt", "pro").
 - multimedia: CLB Multimedia PTIT (MPC, "mm", CLB Sáng tạo Đa phương tiện; hợp với sinh viên ngành Đa phương tiện - "dpt": thiết kế, chụp ảnh, quay dựng, truyền thông).
@@ -35,6 +35,18 @@ Nhiệm vụ (KHÔNG trả lời câu hỏi):
 
 Chỉ trả về một object JSON đúng dạng sau, không giải thích:
 {"query": "...", "clubs": ["..."], "sub_queries": ["..."]}"""
+
+# v2: câu hỏi nhiều CLB thì tách một câu hỏi con cho TỪNG CLB (ghi rõ tên CLB), để truy xuất được
+# đoạn văn của từng CLB thay vì đoạn tổng quan chung của S2B.
+REWRITE_SYSTEM_V2 = REWRITE_SYSTEM_V1.replace(
+    """3. "sub_queries": nếu câu hỏi gồm nhiều ý hoặc so sánh nhiều CLB, tách thành các câu hỏi con có dấu, mỗi câu một ý (tối đa 3). Câu hỏi một ý thì để [].
+""",
+    """3. "sub_queries": nếu câu hỏi gồm nhiều ý, tách thành các câu hỏi con có dấu, mỗi câu một ý (tối đa 3). Câu hỏi một ý thì để [].
+   Nếu câu hỏi so sánh hoặc hỏi về nhiều CLB (kể cả "các CLB trong S2B"), viết MỘT câu hỏi con cho TỪNG CLB, ghi rõ tên đầy đủ của CLB và diễn đạt bằng thông tin cụ thể cần tìm (ví dụ "CLB Lập Trình PTIT được thành lập khi nào?" thay vì "CLB nào lâu đời nhất?"), và liệt kê tất cả các CLB đó trong "clubs".
+""",
+)
+assert REWRITE_SYSTEM_V2 != REWRITE_SYSTEM_V1
+REWRITE_PROMPTS = {"v1": REWRITE_SYSTEM_V1, "v2": REWRITE_SYSTEM_V2}
 
 _JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -68,13 +80,14 @@ def parse_plan(original: str, reply: str) -> QueryPlan:
 
 
 class QueryRewriter:
-    def __init__(self, llm: LLMClient, model: str):
+    def __init__(self, llm: LLMClient, model: str, prompt: str = "v1"):
         self.llm, self.model = llm, model
+        self.system = REWRITE_PROMPTS[prompt]
 
     def __call__(self, query: str) -> QueryPlan:
         reply = self.llm.chat(
             [
-                {"role": "system", "content": REWRITE_SYSTEM},
+                {"role": "system", "content": self.system},
                 {"role": "user", "content": query},
             ],
             model=self.model,
