@@ -261,3 +261,39 @@ def test_llm_reranker_bad_json_keeps_rrf_order(corpus):
     )
     broken.index(corpus)
     assert [d.id for d in broken.retrieve(plan)] == [d.id for d in base.retrieve(plan)]
+
+
+def test_llm_reranker_prompt_unchanged_for_default_max(corpus):
+    """max_ids = 8 phải sinh đúng prompt của E7 (giữ cache), giá trị khác đổi con số trong prompt."""
+    from solution.rerank import LLMReranker
+
+    assert "(tối đa 8 id)" in LLMReranker(FakeLLM(lambda m: ""), "m").system
+    assert "(tối đa 10 id)" in LLMReranker(FakeLLM(lambda m: ""), "m", max_ids=10).system
+
+
+def test_anchor_candidates_extend_pool_without_changing_rrf_order(corpus):
+    """Anchors chỉ thêm ứng viên vào cuối tập rerank; thứ hạng RRF không đổi."""
+    from solution.bm25 import BM25
+    from solution.retrieval import HybridRetriever, RetrievalConfig
+
+    plan = QueryPlan("gcc ra doi nam nao", "GCC ra đời năm nào")
+    base = HybridRetriever(FakeEmbedder(), RetrievalConfig(rerank_depth=1))
+    base.index(corpus)
+    cfg = RetrievalConfig(
+        rerank_depth=1, use_anchors=True, anchors_candidates_only=True, anchor_candidates=2
+    )
+    r = HybridRetriever(FakeEmbedder(), cfg)
+    r.docs, r.bm25, r.doc_vectors = base.docs, base.bm25, base.doc_vectors
+    # anchors giả: chỉ đoạn cuối khớp câu hỏi
+    r.anchor_bm25 = BM25([[] for _ in corpus[:-1]] + [tokens("gcc ra doi nam nao")])
+    assert r.fused_ranking(plan) == base.fused_ranking(plan)
+    pool = r.candidate_pool(plan)
+    assert pool[0] == base.fused_ranking(plan)[0] and len(corpus) - 1 in pool
+
+
+def test_stress_variant_removes_accents_and_abbreviates():
+    from solution.stress import stress_variant
+
+    q = "Sinh viên Học viện ngành đa phương tiện vào CLB Multimedia PTIT được không?"
+    assert stress_variant(q, 0) == "sv hv nganh dpt vao mm dc ko"
+    assert stress_variant(q, 1) == "sv hv nganh dpt vao mpc dc k"

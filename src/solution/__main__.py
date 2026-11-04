@@ -46,6 +46,16 @@ ABLATIONS: dict[str, dict] = {
         "w_anchor_dense_sub": 0.0,
     },
     "anchors_dense_only": {"use_anchors": True, "w_anchor_bm25": 0.0},
+    # Nhánh R (giai đoạn A): mở rộng tập ứng viên cho reranker Haiku
+    "e7": {},
+    "r1_depth30_max10": {"rerank_depth": 30, "rerank_max": 10},
+    "r2_anchor_cand": {"use_anchors": True, "anchors_candidates_only": True},
+    "r12": {
+        "rerank_depth": 30,
+        "rerank_max": 10,
+        "use_anchors": True,
+        "anchors_candidates_only": True,
+    },
 }
 
 
@@ -57,13 +67,19 @@ def _config(overrides: dict) -> PipelineConfig:
     return cfg
 
 
-def bench(workers: int, only: list[str] | None) -> int:
+def bench(workers: int, only: list[str] | None, stress: bool = False) -> int:
     corpus = load_corpus()
     queries = load_queries(DATA_DIR / "train" / "questions.jsonl")
     types = {
         r["id"]: r.get("type", "?") for r in read_jsonl(DATA_DIR / "train" / "questions.jsonl")
     }
     queries = [q for q in queries if q.relevant_ids]  # câu không có doc đúng không tính retrieval
+    if stress:  # biến thể không dấu + viết tắt của chính câu train (solution.stress)
+        from dataclasses import replace
+
+        from solution.stress import stress_variant
+
+        queries = [replace(q, query=stress_variant(q.query, i)) for i, q in enumerate(queries)]
 
     base = SolutionPipeline(_config({}))
     base.index(corpus)
@@ -77,41 +93,56 @@ def bench(workers: int, only: list[str] | None) -> int:
         )
 
     names = only or list(ABLATIONS)
-    reranker = None
-    print(f"{'config':26}{'R@5':>8}{'MRR@5':>8}{'NDCG@5':>8}{'Retr.':>8}   ({len(queries)} câu)")
+    print(
+        f"{'config':26}{'Pool':>6}{'R@pool':>8}{'R@5':>8}{'MRR@5':>8}{'NDCG@5':>8}{'Retr.':>8}"
+        f"   ({len(queries)} câu{', stress' if stress else ''})"
+    )
+    per_type: dict[str, dict] = {}
     for name in names:
         cfg = _config(ABLATIONS[name])
-        cfg.retrieval.use_rerank, use_rerank = False, cfg.retrieval.use_rerank
         pipe = SolutionPipeline(cfg, llm=base.llm)  # embedding có cache: index lại gần như tức thì
         pipe.index(corpus)
-        if use_rerank:
-            if reranker is None:
-                from solution.rerank import CrossEncoderReranker, LLMReranker
+        retr = pipe.retriever
 
-                reranker = (
-                    LLMReranker(base.llm, base.llm_model)
-                    if cfg.retrieval.rerank_backend == "llm"
-                    else CrossEncoderReranker()
-                )
-            cfg.retrieval.use_rerank, pipe.retriever.reranker = True, reranker
-        totals, by_type = defaultdict(float), defaultdict(lambda: defaultdict(float))
-        for q in queries:
+        def one(q, cfg=cfg, retr=retr):
             plan = plans[q.id] if cfg.rewrite else QueryPlan(q.query, q.query)
-            ids = [d.id for d in pipe.retriever.retrieve(plan, cfg.n_retrieved)]
-            m = score_query(ids, set(q.relevant_ids), [5])
-            for key in ("recall@5", "mrr@5", "ndcg@5"):
+            ids = [d.id for d in retr.retrieve(plan, cfg.n_retrieved)]
+            pool = {retr.docs[i].id for i in retr.candidate_pool(plan)}
+            rel = set(q.relevant_ids)
+            return score_query(ids, rel, [5]) | {
+                "pool": len(pool),
+                "recall@pool": len(rel & pool) / len(rel),
+            }
+
+        with ThreadPoolExecutor(workers) as executor:  # rerank gọi Haiku: chạy song song
+            results = list(executor.map(one, queries))
+        keys = ("pool", "recall@pool", "recall@5", "mrr@5", "ndcg@5")
+        totals, by_type = defaultdict(float), defaultdict(lambda: defaultdict(float))
+        for q, m in zip(queries, results, strict=True):
+            for key in keys:
                 totals[key] += m[key]
                 by_type[types[q.id]][key] += m[key]
             by_type[types[q.id]]["n"] += 1
         n = len(queries)
         r, mrr, ndcg = (totals[k] / n * 100 for k in ("recall@5", "mrr@5", "ndcg@5"))
-        print(f"{name:26}{r:8.2f}{mrr:8.2f}{ndcg:8.2f}{(r + mrr + ndcg) / 3:8.2f}")
-        if name == names[-1]:
-            print(f"\nTheo loại câu hỏi ({name}):")
-            for t, v in sorted(by_type.items(), key=lambda kv: -kv[1]["n"]):
-                print(
-                    f"  {t:22}{int(v['n']):4}  R@5 {v['recall@5'] / v['n']:.2f}  MRR@5 {v['mrr@5'] / v['n']:.2f}"
+        print(
+            f"{name:26}{totals['pool'] / n:6.1f}{totals['recall@pool'] / n * 100:8.2f}"
+            f"{r:8.2f}{mrr:8.2f}{ndcg:8.2f}{(r + mrr + ndcg) / 3:8.2f}"
+        )
+        per_type[name] = by_type
+    print("\nTheo loại câu hỏi (mỗi cấu hình: R@pool / R@5 / NDCG@5):")
+    first = per_type[names[0]]
+    for t in sorted(first, key=lambda t: -first[t]["n"]):
+        cells = [
+            "{:.2f}/{:.2f}/{:.2f}".format(
+                *(
+                    per_type[name][t][k] / per_type[name][t]["n"]
+                    for k in ("recall@pool", "recall@5", "ndcg@5")
                 )
+            )
+            for name in names
+        ]
+        print(f"  {t:20}{int(first[t]['n']):4}  " + "  ".join(cells))
     return 0
 
 
@@ -151,6 +182,9 @@ def main() -> int:
     b = sub.add_parser("bench", help="ablation retrieval trên train")
     b.add_argument("--only", nargs="*", choices=list(ABLATIONS))
     b.add_argument("--workers", type=int, default=6)
+    b.add_argument(
+        "--stress", action="store_true", help="câu train bỏ dấu + viết tắt (proxy Private)"
+    )
     sub.add_parser(
         "anchors", help="sinh câu hỏi giả định cho từng đoạn (data/solution/doc_anchors.jsonl)"
     )
@@ -159,7 +193,7 @@ def main() -> int:
     w.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     if args.cmd == "bench":
-        return bench(args.workers, args.only)
+        return bench(args.workers, args.only, args.stress)
     if args.cmd == "anchors":
         return build_anchors()
     return warm(args.split, args.workers)
