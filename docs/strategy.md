@@ -67,7 +67,7 @@ Cấm: chèn chỉ dẫn hay nhãn chấm vào câu trả lời nhằm tác đ�
 - Chấm judge đầy đủ chỉ ở các mốc (mỗi lần tốn vài phần ngân sách 5 USD). Kiểm tra số dư trước.
 - Public Test: tối đa 10 lượt/ngày. Nộp sau mỗi cải tiến lớn; train và Public có thể lệch (đề Public khó hơn).
 - **Chọn bản cho Private** dựa trên cả train lẫn Public, không chọn bản chỉ tốt nhờ một lần nộp may mắn (judge lệch ±1).
-- 07/11: tag `private-test`, chạy thử end-to-end trên `public_test` từ tag đó.
+- Tag `private-final`, diễn tập end-to-end trên `public_test` từ tag đó: xem [private-day.md](private-day.md).
 
 ## 4. Demo Product (15%)
 
@@ -109,11 +109,15 @@ cách tránh overfit train; xử lý câu không có đáp án; vì sao không c
 **Cập nhật 04/11:** Giai đoạn A (E8, E9) không tìm được cải tiến vượt tiêu chí → chốt E7 cho Private. Tiếp theo:
 Giai đoạn B (đóng băng cấu hình, script chạy một lệnh, chống lỗi, diễn tập) rồi Giai đoạn C (README, kiến trúc, API chatbot).
 
+**Cập nhật 05/11:** Giai đoạn B xong. Chống lỗi gateway (PR #6), bộ đo hard-dev E10 không khó hơn train nên bỏ vòng lặp
+tăng điểm (PR #7), khóa thư viện (PR #8), diễn tập clone sạch khớp E7 42/42, kịch bản ngày thi `docs/private-day.md`.
+Bản Private = tag `private-final` (commit `cf4c184`). Còn: Giai đoạn C (README, kiến trúc, API chatbot, slide).
+
 | Ngày | Việc |
 |---|---|
 | 04/11 | E1 (xong), nộp Public lần đầu. Bắt đầu R4 rerank |
 | 05/11 | R4/R5, G2/G3; chấm judge một mốc; nộp Public |
 | 06/11 | Chatbot D1–D3, D6; README T4 |
-| 07/11 | Chốt bản tốt nhất, tag `private-test`, nộp Public cuối, kiểm tra ngân sách |
-| 08/11 | Chỉ chạy `neorag run private_test` từ tag và nộp |
+| 07/11 | Chốt bản tốt nhất, tag `private-final`, nộp Public cuối, kiểm tra ngân sách |
+| 08/11 | Chỉ chạy `scripts/run_private.ps1` từ tag `private-final` và nộp ([private-day.md](private-day.md)) |
 | Sau | Slide + luyện demo |

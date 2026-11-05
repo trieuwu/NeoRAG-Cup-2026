@@ -119,6 +119,19 @@ không còn tín hiệu nào để tối ưu retrieval mà không nhìn vào câ
 Chi phí (đếm token thật của request ra gateway, giá niêm yết Haiku): sinh + lọc 259 lời gọi, 469k token vào, 196k
 token ra ≈ $0.145; bench E7 trên hard-dev 142 lời gọi ≈ $0.095. **Lũy kế Pha 2: ≈ $0.24** (ngân sách $1.2).
 
+### Diễn tập Private (05/11, commit `cf4c184`): clone sạch, cài từ `requirements.lock.txt`
+
+| Lần chạy | Cache | Thời gian | Kết quả |
+|---|---|---|---|
+| `neorag run public_test` (cấu hình `configs/private.env`) | rỗng | 352 s (median 8.0 s/câu, p95 12.9 s) | sanity xanh, 0 fallback; 126 lời gọi, 475k token vào, 51k ra ≈ **$0.073** |
+| `scripts/run_private.ps1 -Split public_test` | cache của E7 | < 1 phút | **khớp 42/42** với file Public E7, sanity xanh |
+
+**Độ dao động giữa các lần chạy không cache:** so với file E7 đã nộp, lần chạy cache rỗng chỉ trùng thứ tự top-5 ở
+9/42 câu, trùng tập top-5 ở 18/42 câu, answer khác ở 41/42 câu. Haiku (không được đặt temperature) cho bản viết lại
+câu hỏi và thứ hạng rerank khác nhau mỗi lần, nên điểm Public 88.95 là MỘT lần rút; điểm Private cũng sẽ là một lần
+rút. Không có cách đo độ lệch này mà không nộp (không có đáp án Public); sanity check (từ chối 14%, độ dài 221 so với
+223 ký tự) cho thấy hành vi tổng thể giữ nguyên.
+
 ### Ablation E6
 
 **Bài học từ Public (82.84 < 83.55):** anchors không giúp retrieval Public (Recall@5 giữ nguyên, MRR/NDCG giảm nhẹ);
