@@ -152,14 +152,40 @@ uvicorn app.api:app --port 8000                    # API cho giao diện (FastAP
 python -m streamlit run app/chat.py                # giao diện dự phòng
 ```
 
-`POST /api/chat` stream từng giai đoạn (`stage`), từng phần câu trả lời (`token`), rồi gửi `done` gồm:
-- câu trả lời kèm trích dẫn `[n]` trỏ tới đoạn nguồn;
-- câu hỏi đã được hiểu (bản viết lại, viết tắt đã mở rộng);
-- danh sách ứng viên kèm hạng BM25, dense và rerank;
-- thời gian từng bước, số lời gọi LLM và chi phí ước tính.
+`POST /api/chat` với body `{"message": "...", "cite": true}` (1–500 ký tự sau khi bỏ khoảng trắng hai đầu, sai thì
+HTTP 422) trả về luồng **SSE** (`text/event-stream`, đọc bằng `fetch` + `ReadableStream` vì là POST):
+
+| Sự kiện | Dữ liệu | Khi nào |
+|---|---|---|
+| `stage` | `{name: rewrite\|retrieve\|rerank\|generate, status: start\|done, ms}` | đầu và cuối mỗi bước (`ms` chỉ có ở `done`) |
+| `token` | `{text}` | từng phần câu trả lời |
+| `incident` | `{type: "retry", stage, attempt, wait_s}` | gateway lỗi tạm thời (429, timeout, 5xx), sắp thử lại sau `wait_s` giây |
+| `incident` | `{type: "fallback", stage, attempt: null, wait_s: null, error}` | một bước đã chuyển sang phương án dự phòng |
+| `ping` | `{}` | mỗi 5 giây khi chưa có sự kiện mới (ví dụ lúc chờ thử lại) |
+| `done` | xem dưới | kết thúc |
+| `error` | `{message}` | lỗi không lường trước (thay cho `done`) |
+
+`done` gồm `answer` (có `[n]` khi `cite=true`), `abstained`, `citations[{n, id, club, topic, text, score, cited}]`,
+`retrieved_ids`, `latency_ms` và `trace`:
+- `original_query`, `rewritten_query`, `clubs`, `sub_queries`, `expansions[{from, to}]`;
+- `candidates[{id, club, topic, bm25_rank, dense_rank, rerank_rank, selected}]`: 20 ứng viên đưa vào rerank;
+  hạng là `null` nếu đoạn không có trong danh sách đó;
+- `stages[{name, ms}]`, `llm_calls`, `llm_cache_hits`, `cache_hit` (mọi lời gọi đều trúng cache), `tokens{in, out,
+  estimated}`, `cost_usd` (ước tính theo giá niêm yết), `incidents`.
+
+Một số lưu ý cho giao diện:
+- `abstained` chỉ là `true` khi câu đầu tiên là câu từ chối VÀ câu trả lời không có trích dẫn `[n]` nào. Câu trả
+  lời một phần, kiểu "... [1]. Tài liệu không đề cập ...", cho `false`.
+- `citations` luôn là 5 đoạn gần nhất, kể cả khi từ chối.
+- Client ngắt kết nối (bấm Dừng) thì pipeline dừng ở ranh giới bước kế tiếp hoặc ở token kế tiếp, và không gửi
+  `done`.
+- Server không lưu lịch sử hội thoại: mỗi request độc lập.
+- CORS mặc định mở mọi origin, đổi bằng `NEORAG_CORS_ORIGINS`.
+- Hỏi lại một câu đã hỏi thì trả lời ngay (`cache_hit: true`, $0). Câu mới tốn khoảng $0.002.
 
 Các endpoint khác: `GET /api/suggestions`, `GET /api/doc/{id}`, `GET /api/health`. Chế độ trích dẫn chỉ áp dụng cho
-chatbot; file nộp bài đi qua `SolutionPipeline.run` và có test bảo đảm kết quả không đổi.
+chatbot; file nộp bài đi qua `SolutionPipeline.run` và có test bảo đảm kết quả không đổi. Mã giao diện đặt trong
+[`web/`](web/).
 
 ## 7. Cấu trúc repository
 
@@ -167,6 +193,7 @@ chatbot; file nộp bài đi qua `SolutionPipeline.run` và có test bảo đả
 src/solution/      pipeline của đội: query, retrieval, rerank, prompts, pipeline, resilience, trace, bench
 src/neorag/        mã của BTC (bộ chấm, CLI, baseline) — không sửa
 app/               api.py (FastAPI + SSE), chat.py (Streamlit)
+web/               giao diện chatbot (frontend riêng, gọi app/api.py)
 scripts/           run_private.ps1/.sh, sanity_check.py, compare_predictions.py, install.py
 configs/           private.env (cấu hình đóng băng), sanity_reference.json, eval.toml (của BTC)
 data/              corpus.jsonl (118 đoạn), train/, public_test/, solution/ (anchors, hard-dev)
