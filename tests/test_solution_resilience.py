@@ -346,3 +346,13 @@ def test_log_records_each_question(corpus, tmp_path):
     assert rows[0]["fallback_used"] and rows[0]["incidents"][0]["stage"] == "rerank"
     assert set(rows[0]) >= {"query", "abstained", "answer_chars", "n_ids", "latency_ms"}
     assert np.isfinite(rows[1]["latency_ms"])
+
+
+def test_cache_path_from_env_gives_independent_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    monkeypatch.setenv("RAG_CACHE_PATH", str(tmp_path / "run1" / "cache.sqlite"))
+    pipe = SolutionPipeline()
+    assert pipe.config.cache_path.endswith("cache.sqlite")
+    assert (tmp_path / "run1" / "cache.sqlite").exists()
+    monkeypatch.delenv("RAG_CACHE_PATH")
+    assert PipelineConfig.from_env().cache_path == ".cache/solution.sqlite"
