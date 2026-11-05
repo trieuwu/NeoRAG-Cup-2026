@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -297,3 +298,31 @@ def test_stress_variant_removes_accents_and_abbreviates():
     q = "Sinh viên Học viện ngành đa phương tiện vào CLB Multimedia PTIT được không?"
     assert stress_variant(q, 0) == "sv hv nganh dpt vao mm dc ko"
     assert stress_variant(q, 1) == "sv hv nganh dpt vao mpc dc k"
+
+
+def test_harddev_groups_are_deterministic_and_filter_needs_exact_passages():
+    from neorag.data import Document
+    from solution import harddev
+
+    docs = [
+        Document(i + 1, club, topic, f"{club} {topic} năm {2010 + i}, hoạt động số {i}.")
+        for i, (club, topic) in enumerate(
+            (c, t)
+            for c in ("CLB A", "CLB B", "CLB C")
+            for t in ("Giới thiệu", "Đào tạo", "Sự kiện")
+        )
+    ]
+    vectors = FakeEmbedder().embed([d.text for d in docs])
+    groups = harddev.sample_groups(docs, vectors, 9, seed=1)
+    assert groups == harddev.sample_groups(docs, vectors, 9, seed=1)
+    assert {g.kind for g in groups} == set(harddev.KINDS)
+
+    def responder(messages):
+        if "tạo câu hỏi kiểm thử" in messages[0]["content"]:
+            return '{"ok": true, "question": "q?"}'
+        ids = [int(x) for x in re.findall(r"^\[(\d+)\]", messages[1]["content"], re.M)]
+        return json.dumps({"ids": ids[:1], "ambiguous": True})  # chỉ chọn một đoạn
+
+    kept, stats = harddev.build(docs, vectors, FakeLLM(responder), "m", n=9, workers=1)
+    assert all(len(r["relevant_ids"]) == 1 for r in kept)  # nhóm nhiều đoạn bị loại
+    assert sum(stats.values()) + len(kept) == 9 and stats["thiếu đoạn"] > 0

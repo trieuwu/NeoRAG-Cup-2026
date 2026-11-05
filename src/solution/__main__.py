@@ -1,6 +1,7 @@
 """Công cụ thực nghiệm nhanh.
 
     python -m solution bench            # ablation retrieval trên train, không sinh câu trả lời
+    python -m solution bench --set harddev   # trên bộ hard-dev (python -m solution harddev để tạo)
     python -m solution warm train       # chạy pipeline song song để làm nóng cache cho `neorag run`
 
 `bench` chỉ gọi LLM cho bước viết lại câu hỏi (cache sau lần đầu), nên thử nhiều cấu hình
@@ -73,12 +74,16 @@ def _config(overrides: dict) -> PipelineConfig:
     return cfg
 
 
-def bench(workers: int, only: list[str] | None, stress: bool = False) -> int:
+def bench(
+    workers: int, only: list[str] | None, stress: bool = False, dataset: str = "train"
+) -> int:
+    from solution.harddev import HARD_DEV_PATH
+
     corpus = load_corpus()
-    queries = load_queries(DATA_DIR / "train" / "questions.jsonl")
-    types = {
-        r["id"]: r.get("type", "?") for r in read_jsonl(DATA_DIR / "train" / "questions.jsonl")
-    }
+    path = HARD_DEV_PATH if dataset == "harddev" else DATA_DIR / "train" / "questions.jsonl"
+    stress = stress or dataset == "stress"
+    queries = load_queries(path)
+    types = {r["id"]: r.get("type", "?") for r in read_jsonl(path)}
     queries = [q for q in queries if q.relevant_ids]  # câu không có doc đúng không tính retrieval
     if stress:  # biến thể không dấu + viết tắt của chính câu train (solution.stress)
         from dataclasses import replace
@@ -101,7 +106,7 @@ def bench(workers: int, only: list[str] | None, stress: bool = False) -> int:
     names = only or list(ABLATIONS)
     print(
         f"{'config':26}{'Pool':>6}{'R@pool':>8}{'R@5':>8}{'MRR@5':>8}{'NDCG@5':>8}{'Retr.':>8}"
-        f"   ({len(queries)} câu{', stress' if stress else ''})"
+        f"   ({len(queries)} câu, {dataset}{' + stress' if stress and dataset != 'stress' else ''})"
     )
     per_type: dict[str, dict] = {}
     for name in names:
@@ -182,6 +187,26 @@ def build_anchors() -> int:
     return 0
 
 
+def build_harddev(n: int) -> int:
+    import os
+
+    from solution import harddev
+
+    pipe = SolutionPipeline()
+    corpus = load_corpus()
+    pipe.index(corpus)  # embedding corpus đã có trong cache
+    rows, stats = harddev.build(
+        corpus, pipe.retriever.doc_vectors, pipe.llm, os.getenv("LLM_MODEL", "claude-haiku-5-5"), n
+    )
+    harddev.save(rows)
+    kinds = defaultdict(int)
+    for r in rows:
+        kinds[f"{r['type']} / {r['style']}"] += 1
+    print(f"Giữ {len(rows)}/{n} câu → {harddev.HARD_DEV_PATH}. Loại: {stats}")
+    print("  " + ", ".join(f"{k}: {v}" for k, v in sorted(kinds.items())))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m solution")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -191,6 +216,9 @@ def main() -> int:
     b.add_argument(
         "--stress", action="store_true", help="câu train bỏ dấu + viết tắt (proxy Private)"
     )
+    b.add_argument("--set", dest="dataset", choices=["train", "stress", "harddev"], default="train")
+    h = sub.add_parser("harddev", help="sinh bộ hard-dev từ corpus (data/solution/hard_dev.jsonl)")
+    h.add_argument("--n", type=int, default=130, help="số câu ứng viên trước khi lọc")
     sub.add_parser(
         "anchors", help="sinh câu hỏi giả định cho từng đoạn (data/solution/doc_anchors.jsonl)"
     )
@@ -199,7 +227,9 @@ def main() -> int:
     w.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     if args.cmd == "bench":
-        return bench(args.workers, args.only, args.stress)
+        return bench(args.workers, args.only, args.stress, args.dataset)
+    if args.cmd == "harddev":
+        return build_harddev(args.n)
     if args.cmd == "anchors":
         return build_anchors()
     return warm(args.split, args.workers)
