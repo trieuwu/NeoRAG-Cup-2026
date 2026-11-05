@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Cài đặt
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,api]"
       - name: Lint (ruff)
         run: |
           ruff check .
