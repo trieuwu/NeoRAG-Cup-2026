@@ -39,3 +39,11 @@ models_cache/
 
 # Ghi chú học tập cá nhân
 STUDY_REPORT.md
+
+# Frontend (web/)
+web/node_modules/
+web/dist/
+web/build/
+web/.next/
+web/.env*
+web/*.log
