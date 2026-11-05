@@ -126,7 +126,11 @@ token ra ≈ $0.145; bench E7 trên hard-dev 142 lời gọi ≈ $0.095. **Lũy 
 | `neorag run public_test` (cấu hình `configs/private.env`) | rỗng | 352 s (median 8.0 s/câu, p95 12.9 s) | sanity xanh, 0 fallback; 126 lời gọi, 475k token vào, 51k ra ≈ **$0.073** |
 | `scripts/run_private.ps1 -Split public_test` | cache của E7 | < 1 phút | **khớp 42/42** với file Public E7, sanity xanh |
 
-**Độ dao động giữa các lần chạy không cache:** so với file E7 đã nộp, lần chạy cache rỗng chỉ trùng thứ tự top-5 ở
+Diễn tập lại trên commit `2d18a31` (thêm cache riêng mỗi lần chạy, PR #10), clone sạch: `-Cache` = cache E7 → khớp
+42/42; mặc định cache mới → 5.3 phút, sanity xanh, 0 fallback, từ chối 19%, độ dài TB 222 ký tự.
+
+**Độ dao động giữa các lần chạy không cache:** hai lần rút độc lập trùng tập top-5 với file E7 ở 18/42 và 19/42
+câu, trùng nhau ở 22/42 câu. so với file E7 đã nộp, lần chạy cache rỗng chỉ trùng thứ tự top-5 ở
 9/42 câu, trùng tập top-5 ở 18/42 câu, answer khác ở 41/42 câu. Haiku (không được đặt temperature) cho bản viết lại
 câu hỏi và thứ hạng rerank khác nhau mỗi lần, nên điểm Public 88.95 là MỘT lần rút; điểm Private cũng sẽ là một lần
 rút. Không có cách đo độ lệch này mà không nộp (không có đáp án Public); sanity check (từ chối 14%, độ dài 221 so với
