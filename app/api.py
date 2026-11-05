@@ -3,10 +3,14 @@
     uvicorn app.api:app --port 8000          # cài thêm: pip install -e ".[api]"
 
 - POST /api/chat           {"message": "...", "cite": true} → luồng SSE:
-      event: stage   {"name": "rewrite|retrieve|rerank|generate", "status": "start|done", "ms"}
-      event: token   {"text": "..."}
-      event: done    {answer, abstained, citations[], retrieved_ids, trace{...}, latency_ms}
-      event: error   {"message": "..."}
+      event: stage     {"name": "rewrite|retrieve|rerank|generate", "status": "start|done", "ms"}
+      event: token     {"text": "..."}
+      event: incident  {"type": "retry|fallback", "stage", "attempt", "wait_s"[, "error"]}
+      event: ping      {}  (mỗi PING_S giây khi chưa có sự kiện mới, vd. lúc chờ gateway thử lại)
+      event: done      {answer, abstained, citations[], retrieved_ids, trace{...}, latency_ms}
+      event: error     {"message": "..."}
+  message: 1-500 ký tự sau khi bỏ khoảng trắng hai đầu (sai → HTTP 422). Client ngắt kết nối → pipeline
+  dừng ở ranh giới bước kế tiếp, không phát "done".
 - GET  /api/suggestions    câu hỏi gợi ý cho giao diện
 - GET  /api/doc/{id}       nội dung một đoạn trong corpus
 - GET  /api/health         trạng thái pipeline
@@ -17,17 +21,19 @@ Biến môi trường: NEORAG_CORS_ORIGINS (mặc định "*"), các biến RAG_
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import queue
 import threading
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from functools import lru_cache
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, StringConstraints
 
 from neorag.data import load_corpus
 from solution.pipeline import SolutionPipeline
@@ -43,8 +49,15 @@ SUGGESTIONS = [
 ]
 
 
+PING_S = 5.0  # gửi "ping" khi im lặng quá lâu để client/proxy không đóng kết nối
+MAX_MESSAGE = 500
+
+
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=1000)
+    # strip_whitespace chạy TRƯỚC kiểm tra độ dài: chuỗi toàn khoảng trắng bị từ chối (422)
+    message: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_MESSAGE)
+    ]
     cite: bool = True
 
 
@@ -61,24 +74,39 @@ def _sse(kind: str, data: dict) -> str:
     return f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _run_in_thread(chat: TracedChat, message: str, cite: bool) -> Iterator[str]:
+async def _events(chat: TracedChat, message: str, cite: bool) -> AsyncIterator[str]:
     """Chạy toàn bộ pipeline trên MỘT luồng riêng (sổ sự cố và bộ đếm lời gọi theo luồng), đẩy sự kiện qua hàng
-    đợi; luồng SSE chỉ đọc hàng đợi. Lỗi không lường trước được trả về dưới dạng event `error`."""
+    đợi; luồng SSE chỉ đọc hàng đợi, gửi "ping" khi im lặng quá PING_S giây. Client ngắt kết nối → hủy generator
+    này → đặt cờ `cancel` để pipeline dừng ở ranh giới bước kế tiếp. Lỗi không lường trước → event `error`."""
     q: queue.Queue = queue.Queue()
     end = object()
+    cancel = threading.Event()
+
+    def sink(kind: str, data: dict) -> None:
+        q.put(_sse(kind, data))
 
     def worker():
         try:
-            for kind, data in chat.stream(message, cite=cite):
-                q.put(_sse(kind, data))
+            for kind, data in chat.stream(message, cite=cite, on_event=sink, cancel=cancel):
+                sink(kind, data)
         except Exception as exc:  # noqa: BLE001 - không để kết nối treo
-            q.put(_sse("error", {"message": f"{type(exc).__name__}: {exc}"}))
+            sink("error", {"message": f"{type(exc).__name__}: {exc}"})
         finally:
             q.put(end)
 
     threading.Thread(target=worker, daemon=True).start()
-    while (item := q.get()) is not end:
-        yield item
+    try:
+        while True:
+            try:
+                item = await asyncio.to_thread(q.get, True, PING_S)
+            except queue.Empty:
+                yield _sse("ping", {})
+                continue
+            if item is end:
+                break
+            yield item
+    finally:
+        cancel.set()
 
 
 def create_app(chat_factory=get_chat) -> FastAPI:
@@ -92,7 +120,7 @@ def create_app(chat_factory=get_chat) -> FastAPI:
     def chat(req: ChatRequest):
         traced, _ = chat_factory()
         return StreamingResponse(
-            _run_in_thread(traced, req.message.strip(), req.cite),
+            _events(traced, req.message, req.cite),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

@@ -9,13 +9,15 @@ Các bước giống hệt `SolutionPipeline`: viết lại câu hỏi → BM25 
 
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from neorag.llm import _key as cache_key
+from solution import resilience
 from solution.pipeline import SolutionPipeline
 from solution.prompts import answer_messages
 from solution.resilience import (
@@ -23,7 +25,6 @@ from solution.resilience import (
     clip_answer,
     collect_incidents,
     fallback_answer,
-    is_abstention,
     record,
     start_incidents,
 )
@@ -36,6 +37,20 @@ CITE_RULE = (
     "ví dụ [1] hoặc [1][3]. Câu từ chối không cần trích dẫn."
 )
 _CITATION = re.compile(r"\[(\d+)\]")
+_FIRST_SENTENCE = re.compile(r"^.*?(?:[.!?…](?=\s|$)|$)", re.S)
+_REFUSAL = ("không có thông tin", "không đề cập", "không có dữ liệu")
+
+EventSink = Callable[[str, dict], None]
+
+
+def is_refusal(answer: str) -> bool:
+    """Câu trả lời là câu TỪ CHỐI: câu đầu tiên nói tài liệu không có thông tin VÀ không có trích dẫn [n]
+    nào. Câu trả lời một phần (câu đầu trả lời, câu sau nói thiếu dữ liệu, hoặc có trích dẫn) → False."""
+    text = (answer or "").strip()
+    if _CITATION.search(text):
+        return False
+    first = _FIRST_SENTENCE.match(text).group().lower()
+    return any(p in first for p in _REFUSAL)
 
 
 def _tokens(text: str) -> int:
@@ -127,6 +142,44 @@ class TracedChat:
         if not isinstance(llm.inner, _MeteredClient):
             llm.inner = _MeteredClient(llm.inner)
         self.client: _MeteredClient = llm.inner
+        self._local = (
+            threading.local()
+        )  # giai đoạn hiện tại + nơi nhận sự kiện của request (theo luồng)
+        self._sleep = llm.sleep
+        llm.sleep = self._retry_sleep  # ResilientLLM gọi sleep(wait) trước mỗi lần thử lại
+
+    # ------------------------------------------------------------ sự cố
+
+    def _emit(self, kind: str, data: dict) -> None:
+        sink = getattr(self._local, "sink", None)
+        if sink is not None:
+            sink(kind, data)
+
+    def _retry_sleep(self, wait_s: float) -> None:
+        backoff = getattr(self.pipe.llm, "backoff", 0) or 0
+        attempt = 1 + round(math.log(wait_s / backoff, 3)) if backoff and wait_s > 0 else None
+        stage = getattr(self._local, "stage", None)
+        self._emit(
+            "incident", {"type": "retry", "stage": stage, "attempt": attempt, "wait_s": wait_s}
+        )
+        self._sleep(wait_s)
+
+    def _report_fallbacks(self) -> None:
+        """Phát sự kiện cho các sự cố mới trong sổ của resilience (bước đã chuyển sang dự phòng)."""
+        items = getattr(resilience._local, "items", [])
+        seen = getattr(self._local, "seen", 0)
+        for item in items[seen:]:
+            self._emit(
+                "incident",
+                {
+                    "type": "fallback",
+                    "stage": item["stage"],
+                    "attempt": None,
+                    "wait_s": None,
+                    "error": item["error"],
+                },
+            )
+        self._local.seen = len(items)
 
     # ------------------------------------------------------------ các bước
 
@@ -140,13 +193,18 @@ class TracedChat:
         def rank_of(seq, i):
             return seq.index(i) + 1 if i in seq else None
 
+        docs_all = self.pipe.retriever.docs
         return [
             {
-                "id": self.pipe.retriever.docs[i].id,
-                "bm25": rank_of(bm25, i),
-                "dense": rank_of(dense, i),
-                "rerank": rank_of(rerank_order, i),
-                "selected": self.pipe.retriever.docs[i].id in selected,
+                "id": docs_all[i].id,
+                "club": docs_all[i].club,
+                "topic": docs_all[i].topic,
+                "bm25_rank": rank_of(
+                    bm25, i
+                ),  # hạng trong danh sách BM25 (top-30), null nếu không có
+                "dense_rank": rank_of(dense, i),  # hạng dense theo bản viết lại
+                "rerank_rank": rank_of(rerank_order, i),  # thứ tự Haiku chọn, null nếu không chọn
+                "selected": docs_all[i].id in selected,  # nằm trong top-5 đưa vào prompt
             }
             for i in head
         ]
@@ -214,46 +272,79 @@ class TracedChat:
 
     # ------------------------------------------------------------ API
 
-    def stream(self, query: str, cite: bool = True) -> Iterator[tuple[str, dict]]:
-        """Sinh các sự kiện ("stage" | "token" | "done", dữ liệu). Phải được lặp hết trên CÙNG một luồng."""
+    def stream(
+        self,
+        query: str,
+        cite: bool = True,
+        on_event: EventSink | None = None,
+        cancel: threading.Event | None = None,
+    ) -> Iterator[tuple[str, dict]]:
+        """Sinh các sự kiện ("stage" | "token" | "done", dữ liệu). Phải được lặp hết trên CÙNG một luồng.
+
+        on_event: nhận sự kiện phát giữa chừng một bước ("incident": thử lại, dự phòng) ngay khi xảy ra.
+        cancel: được đặt khi client ngắt kết nối; kiểm tra giữa các bước, dừng mà không phát "done".
+        """
         started = time.perf_counter()
         start_incidents()
         meter = CallMeter()
         self.client.local.meter = meter
+        self._local.sink, self._local.seen = on_event, 0
         timer = StageTimer()
         retr, cfg = self.pipe.retriever, self.pipe.config.retrieval
-        try:
-            yield ("stage", {"name": "rewrite", "status": "start"})
-            plan = timer.run("rewrite", lambda: self.pipe.plan(query))
-            yield ("stage", {"name": "rewrite", "status": "done", "ms": timer.stages[-1]["ms"]})
 
-            yield ("stage", {"name": "retrieve", "status": "start"})
+        def begin(name):
+            self._local.stage = name
+            return ("stage", {"name": name, "status": "start"})
+
+        def end(name):
+            self._report_fallbacks()
+            return ("stage", {"name": name, "status": "done", "ms": timer.stages[-1]["ms"]})
+
+        def cancelled() -> bool:
+            return cancel is not None and cancel.is_set()
+
+        try:
+            yield begin("rewrite")
+            plan = timer.run("rewrite", lambda: self.pipe.plan(query))
+            yield end("rewrite")
+            if cancelled():
+                return
+
+            yield begin("retrieve")
             lists = timer.run("retrieve", lambda: retr.rankings(plan))
             ranked = retr.fused_ranking(plan)  # embedding vừa tính đã nằm trong cache
-            yield ("stage", {"name": "retrieve", "status": "done", "ms": timer.stages[-1]["ms"]})
+            yield end("retrieve")
+            if cancelled():
+                return
 
             head = retr.candidate_pool(plan, ranked)
             order, fused = [], rrf([(ranked, 1.0)], cfg.rrf_k)
             if cfg.use_rerank and retr.reranker is not None:
-                yield ("stage", {"name": "rerank", "status": "start"})
+                yield begin("rerank")
                 ranked, order, fused = timer.run("rerank", lambda: self._rerank(plan, ranked, head))
-                yield ("stage", {"name": "rerank", "status": "done", "ms": timer.stages[-1]["ms"]})
+                yield end("rerank")
+                if cancelled():
+                    return
             if cfg.diversify_clubs:
                 ranked = retr._diversify(plan, ranked)
             docs = [retr.docs[i] for i in ranked[: self.pipe.config.n_retrieved]]
 
-            yield ("stage", {"name": "generate", "status": "start"})
+            yield begin("generate")
             t0 = time.perf_counter()
             parts = []
             for token in self._generate(query, plan, docs, cite):
+                if cancelled():
+                    return  # client đã ngắt: bỏ phần còn lại (câu trả lời dở không được cache)
                 parts.append(token)
                 yield ("token", {"text": token})
-            ms = round((time.perf_counter() - t0) * 1000, 1)
-            timer.stages.append({"name": "generate", "ms": ms})
-            yield ("stage", {"name": "generate", "status": "done", "ms": ms})
+            timer.stages.append(
+                {"name": "generate", "ms": round((time.perf_counter() - t0) * 1000, 1)}
+            )
+            yield end("generate")
             answer = clip_answer("".join(parts)) or fallback_answer(docs)
         finally:
             self.client.local.meter = None
+            self._local.sink = self._local.stage = None
 
         scores = {retr.docs[i].id: round(s * cfg.rrf_k, 4) for i, s in fused.items()}
         used = {int(n) for n in _CITATION.findall(answer)}
@@ -273,7 +364,7 @@ class TracedChat:
             "done",
             {
                 "answer": answer,
-                "abstained": is_abstention(answer),
+                "abstained": is_refusal(answer),
                 "citations": citations,
                 "retrieved_ids": [d.id for d in docs],
                 "trace": {
@@ -286,6 +377,7 @@ class TracedChat:
                     "stages": timer.stages,
                     "llm_calls": meter.calls,
                     "llm_cache_hits": meter.cached,
+                    "cache_hit": meter.calls > 0 and meter.cached == meter.calls,
                     "tokens": {"in": meter.tokens_in, "out": meter.tokens_out, "estimated": True},
                     "cost_usd": meter.cost_usd,
                     "incidents": collect_incidents(),

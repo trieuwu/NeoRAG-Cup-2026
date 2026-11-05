@@ -105,3 +105,168 @@ def test_api_endpoints_and_sse(corpus):
     done = json.loads(body.strip().split("data: ")[-1])
     assert done["citations"] and "trace" in done
     assert client.post("/api/chat", json={"message": ""}).status_code == 422
+
+
+# ---------------------------------------------------------------- hợp đồng với giao diện
+
+
+class StatusError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def test_candidates_have_club_topic_and_rank_fields(corpus):
+    done = list(TracedChat(_stream_pipeline(corpus)).stream("clb mm thanh lap khi nao"))[-1][1]
+    cand = done["trace"]["candidates"]
+    assert len(cand) == min(20, len(corpus))
+    assert set(cand[0]) == {
+        "id", "club", "topic", "bm25_rank", "dense_rank", "rerank_rank", "selected"
+    }  # fmt: skip
+    assert all(c["rerank_rank"] is None or c["rerank_rank"] >= 1 for c in cand)
+
+
+def test_cache_hit_true_only_when_every_call_is_cached(corpus):
+    from neorag.llm import _key
+
+    class DictCache(dict):
+        def set(self, k, v):
+            self[k] = v
+
+    class CachingLLM(FakeLLM):
+        """Như LLMClient: tra cache trước, ghi cache sau khi gọi."""
+
+        _endpoint = "fake"
+
+        def __init__(self):
+            super().__init__(_responder)
+            self._cache = DictCache()
+
+        def chat(self, messages, model, temperature=None):
+            key = _key("chat", self._endpoint, model, None, messages)
+            if key not in self._cache:
+                self._cache.set(key, super().chat(messages, model))
+            return self._cache[key]
+
+    pipe = SolutionPipeline(PipelineConfig(), llm=CachingLLM())
+    pipe.retriever.embedder = FakeEmbedder()
+    pipe.index(corpus)
+    pipe.llm.inner._client = _stream_pipeline(corpus).llm.inner._client
+    chat = TracedChat(pipe)
+    first = list(chat.stream("clb mm thanh lap khi nao"))[-1][1]["trace"]
+    second = list(chat.stream("clb mm thanh lap khi nao"))[-1][1]["trace"]
+    assert not first["cache_hit"] and first["llm_cache_hits"] < first["llm_calls"]
+    assert second["cache_hit"] and second["llm_cache_hits"] == second["llm_calls"] == 3
+
+
+@pytest.mark.parametrize(
+    "answer, refused",
+    [
+        ("Tài liệu hiện có không có thông tin về phí thành viên của CLB Multimedia PTIT.", True),
+        ("Tài liệu không đề cập đến học phí.", True),
+        (
+            "CLB Multimedia PTIT thành lập ngày 10/11/2012 [1]. Tài liệu không đề cập người sáng lập.",
+            False,
+        ),
+        (
+            "CLB Multimedia PTIT thành lập ngày 10/11/2012. Tài liệu không có thông tin về phí.",
+            False,
+        ),
+        ("Tài liệu không có thông tin về phí, nhưng CLB tuyển thành viên vào tháng 9 [2].", False),
+    ],
+)
+def test_is_refusal_first_sentence_and_no_citation(answer, refused):
+    from solution.trace import is_refusal
+
+    assert is_refusal(answer) is refused
+
+
+@pytest.mark.parametrize(
+    "reply, abstained",
+    [
+        ("Tài liệu hiện có không có thông tin về phí thành viên.", True),
+        (
+            "CLB Multimedia PTIT thành lập ngày 10/11/2012 [1]. Tài liệu không đề cập phí thành viên.",
+            False,
+        ),
+    ],
+)
+def test_done_abstained_for_refusal_but_not_partial_answer(corpus, reply, abstained):
+    pipe = _stream_pipeline(corpus)
+
+    class Completions:
+        def create(self, model, messages, stream):
+            yield type(
+                "C", (), {"choices": [type("Ch", (), {"delta": type("D", (), {"content": reply})})]}
+            )
+
+    pipe.llm.inner._client = type(
+        "Client", (), {"chat": type("Chat", (), {"completions": Completions()})}
+    )()
+    done = list(TracedChat(pipe).stream("phi thanh vien mm"))[-1][1]
+    assert done["abstained"] is abstained
+    assert len(done["citations"]) == 3  # vẫn trả các đoạn gần nhất kể cả khi từ chối
+
+
+def test_incident_events_for_retry_then_fallback(corpus):
+    def responder(messages):
+        if "xếp hạng tài liệu" in messages[0]["content"]:
+            raise StatusError(503)
+        return _responder(messages)
+
+    pipe = _stream_pipeline(corpus)
+    pipe.llm.inner.responder = responder
+    pipe.llm.backoff = 0.001
+    got = []
+    events = list(
+        TracedChat(pipe).stream(
+            "clb mm thanh lap khi nao", on_event=lambda k, d: got.append((k, d))
+        )
+    )
+    retries = [d for k, d in got if k == "incident" and d["type"] == "retry"]
+    fallbacks = [d for k, d in got if k == "incident" and d["type"] == "fallback"]
+    assert [(d["stage"], d["attempt"]) for d in retries] == [("rerank", 1), ("rerank", 2)]
+    assert retries[0]["wait_s"] == pytest.approx(0.001)
+    assert fallbacks and fallbacks[0]["stage"] == "rerank" and "error" in fallbacks[0]
+    assert events[-1][0] == "done"
+
+
+def test_cancel_stops_between_stages_without_done(corpus):
+    import threading
+
+    cancel = threading.Event()
+    kinds = []
+    for kind, data in TracedChat(_stream_pipeline(corpus)).stream(
+        "clb mm thanh lap khi nao", cancel=cancel
+    ):
+        kinds.append((kind, data.get("name"), data.get("status")))
+        if data.get("name") == "rewrite" and data.get("status") == "done":
+            cancel.set()
+    assert kinds[-1] == ("stage", "rewrite", "done") and "done" not in [k for k, *_ in kinds]
+
+
+def _client(corpus, pipe=None):
+    from app.api import create_app
+    from fastapi.testclient import TestClient
+
+    chat = TracedChat(pipe or _stream_pipeline(corpus))
+    return TestClient(create_app(lambda: (chat, {d.id: d for d in corpus})))
+
+
+@pytest.mark.parametrize("message, status", [("   ", 422), ("x" * 501, 422), ("  hi  ", 200)])
+def test_message_validation(corpus, message, status):
+    pytest.importorskip("fastapi")
+    assert _client(corpus).post("/api/chat", json={"message": message}).status_code == status
+
+
+def test_ping_sent_while_waiting(corpus, monkeypatch):
+    pytest.importorskip("fastapi")
+    import time
+
+    import app.api as api
+
+    monkeypatch.setattr(api, "PING_S", 0.05)
+    pipe = _stream_pipeline(corpus)
+    pipe.llm.inner.responder = lambda m: time.sleep(0.3) or _responder(m)
+    body = _client(corpus, pipe).post("/api/chat", json={"message": "clb mm"}).text
+    assert "event: ping" in body and body.rstrip().splitlines()[-2] == "event: done"
