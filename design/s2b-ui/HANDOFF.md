@@ -119,3 +119,17 @@ Tên component React ↔ class gốc: `ChipFilter` (.chip), `ClubBadge` (.badge 
 ## 9. Git
 
 Nhánh `feat/giao-dien-s2b`; commit Conventional Commits, type/scope tiếng Anh, mô tả tiếng Việt có dấu (vd. `feat(web): dựng giao diện chat S2B Hỏi Đáp`). Không ghi co-author hay attribution của AI. Không `git push` khi chưa được người dùng yêu cầu. **Không sửa mã trong ngày 08/11.**
+
+## 10. Ghi chú triển khai (khác với bản thiết kế, cập nhật 05/11)
+
+Bản thật nằm ở `web/` (xem `web/README.md`). Các điểm khác thiết kế:
+
+- **Không dùng Tailwind**: dùng thẳng `tokens/s2b.css` (chép sang `web/src/styles/s2b.css`), vì file này đã có đủ token
+  và class component; tránh hai nguồn định nghĩa style song song. Mục 6 chỉ còn giá trị tham khảo.
+- **Câu so sánh là văn xuôi**: backend chỉ trả `answer` dạng chuỗi (1–2 câu, có `[n]`), không có dữ liệu bảng, nên
+  giao diện không dựng `CompareTable` (.tbl). Ví dụ thật: "CLB Lập Trình PTIT (ProPTIT) thành lập trước, vào ngày
+  09/10/2011, còn CLB Nhà Sáng Tạo Game PTIT (GCC) ra đời năm 2023 [1][2]."
+- **Bỏ nhãn "Dữ liệu giả"** (topbar, panel Nguồn): giao diện dùng dữ liệu thật từ API.
+- Hợp đồng API đã cập nhật so với mục 3: backend có `cache_hit`, `candidates[].club/topic`, tên hạng `bm25_rank` /
+  `dense_rank` / `rerank_rank`, `ping`, cờ huỷ khi ngắt kết nối, chặn chuỗi toàn khoảng trắng và giới hạn 500 ký tự;
+  `abstained` chỉ true khi câu đầu là câu từ chối và không có `[n]`.
