@@ -3,6 +3,10 @@
 #
 #   bash scripts/run_private.sh                          # private_test, yêu cầu HEAD = tag private-final
 #   SPLIT=public_test SKIP_TAG_CHECK=1 bash scripts/run_private.sh   # diễn tập
+#   CACHE=outputs/private_runs/0730/cache.sqlite bash scripts/run_private.sh   # chạy lại đúng lần rút 0730
+#   CACHE=.cache/solution.sqlite ...                                           # dùng cache chung
+# Mặc định mỗi lần chạy dùng một cache MỚI (outputs/<bộ>_runs/<HHMM>/cache.sqlite) = một lần rút độc lập.
+# Sau khi chạy, pred + log + zip + cache được sao lưu vào outputs/<bộ>_runs/<HHMM>/.
 set -uo pipefail
 SPLIT="${SPLIT:-private_test}"
 TAG="${TAG:-private-final}"
@@ -38,10 +42,18 @@ elif [ -x .venv/bin/python ]; then PY=.venv/bin/python
 else PY=python; fi
 SHORT="${SPLIT%_test}"
 STAMP=$(date +%H%M)
-BASE="outputs/${SHORT}_$STAMP"; n=1
-while [ -e "$BASE.zip" ] || [ -e "${BASE}_pred.jsonl" ]; do BASE="outputs/${SHORT}_${STAMP}_$n"; n=$((n+1)); done
+NAME="$STAMP"; BASE="outputs/${SHORT}_$NAME"; n=1
+while [ -e "$BASE.zip" ] || [ -e "${BASE}_pred.jsonl" ] || [ -e "outputs/${SHORT}_runs/$NAME" ]; do
+  NAME="${STAMP}_$n"; BASE="outputs/${SHORT}_$NAME"; n=$((n+1))
+done
 PRED="${BASE}_pred.jsonl"; LOG="${BASE}_log.jsonl"; ZIP="$BASE.zip"
-export RAG_LOG_PATH="$LOG"
+RUN_DIR="outputs/${SHORT}_runs/$NAME"
+CACHE="${CACHE:-}"
+if [ -z "$CACHE" ]; then CACHE="$RUN_DIR/cache.sqlite"
+elif [ ! -f "$CACHE" ]; then fail "không thấy cache $CACHE"; fi
+mkdir -p "$RUN_DIR"
+export RAG_LOG_PATH="$LOG" RAG_CACHE_PATH="$CACHE"
+echo "    lần chạy $NAME, cache: $CACHE"
 
 step "Chạy pipeline ($SPLIT)"
 START=$(date +%s)
@@ -59,6 +71,9 @@ step "Sanity check"
   "$ZIP" "$PRED" "${SPLIT}_pred.jsonl" || fail "không tạo được $ZIP"
 rm -f "${BASE}_submission.zip"
 HASH=$("$PY" -c "import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest()[:12])" "$ZIP")
+cp "$PRED" "$LOG" "$ZIP" "$RUN_DIR/"
+[ "$CACHE" -ef "$RUN_DIR/cache.sqlite" ] || cp "$CACHE" "$RUN_DIR/cache.sqlite"
+echo "Sao lưu lần chạy: $RUN_DIR (pred, log, zip, cache.sqlite)"
 echo
 echo "Thời gian chạy: ~$MINUTES phút · commit $HEAD_SHA · sha256 $HASH"
 if [ "$SANE" -eq 0 ]; then printf '\033[92mSẴN SÀNG NỘP: %s\033[0m\n' "$ZIP"
