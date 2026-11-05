@@ -28,6 +28,15 @@ describe('format', () => {
     ])
     expect(plainAnswer('A [1]. B [2][3].')).toBe('A. B.')
   })
+  it('token bị cắt giữa [n] (lấy từ luồng thật): ghép xong mới tách nên vẫn đúng', () => {
+    const tokens = ['…ra đời nă', 'm 2023 [1][', '2].']
+    const segs = segments(tokens.join(''))
+    expect(segs.filter((s) => s.t === 'cite')).toEqual([
+      { t: 'cite', n: 1 },
+      { t: 'cite', n: 2 },
+    ])
+    expect(segments('m 2023 [1][')).toEqual([{ t: 'text', s: 'm 2023 ' }, { t: 'cite', n: 1 }, { t: 'text', s: '[' }])
+  })
   it('ánh xạ tên CLB của corpus và khóa của bước viết lại', () => {
     expect(club('CLB Lập Trình PTIT').label).toBe('ProPTIT')
     expect(club('CLB Multimedia PTIT').cls).toBe('club--mm')
