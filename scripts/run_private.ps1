@@ -2,12 +2,18 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\run_private.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\run_private.ps1 -Split public_test -SkipTagCheck   # diễn tập
+#   ... -Cache outputs\private_runs\0730\cache.sqlite   # chạy lại đúng lần rút 0730 (vd. sau khi có fallback)
+#   ... -Cache .cache\solution.sqlite                      # dùng cache chung (diễn tập khớp file đã nộp)
+#
+# Mặc định mỗi lần chạy dùng một cache MỚI (outputs/<bộ>_runs/<HHMM>/cache.sqlite) = một lần rút độc lập.
+# Sau khi chạy, pred + log + zip + cache được sao lưu vào outputs/<bộ>_runs/<HHMM>/.
 #
 # Các bước: kiểm tra tag private-final, working tree sạch, file câu hỏi, .env (chỉ kiểm tra tồn tại)
 # -> nạp configs/private.env -> neorag run -> validate -> sanity check -> outputs/<bộ>_<HHMM>.zip (không ghi đè).
 param(
     [string]$Split = "private_test",
     [string]$Tag = "private-final",
+    [string]$Cache = "",
     [switch]$SkipTagCheck
 )
 
@@ -59,10 +65,19 @@ $python = if (Test-Path ".venv/Scripts/python.exe") { ".venv/Scripts/python.exe"
 $short = $Split -replace "_test$", ""
 $stamp = Get-Date -Format "HHmm"
 $base = "outputs/${short}_$stamp"
+$name = $stamp
 $n = 1
-while ((Test-Path "$base.zip") -or (Test-Path "${base}_pred.jsonl")) { $base = "outputs/${short}_${stamp}_$n"; $n++ }
+while ((Test-Path "$base.zip") -or (Test-Path "${base}_pred.jsonl") -or (Test-Path "outputs/${short}_runs/$name")) {
+    $name = "${stamp}_$n"; $base = "outputs/${short}_$name"; $n++
+}
 $pred, $log, $zip = "${base}_pred.jsonl", "${base}_log.jsonl", "$base.zip"
+$runDir = "outputs/${short}_runs/$name"
+if (-not $Cache) { $Cache = "$runDir/cache.sqlite" }
+elseif (-not (Test-Path $Cache)) { Fail "không thấy cache $Cache" }
+New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 $env:RAG_LOG_PATH = $log
+$env:RAG_CACHE_PATH = $Cache
+Write-Host "    lần chạy $name, cache: $Cache"
 
 Step "Chạy pipeline ($Split)"
 $started = Get-Date
@@ -83,6 +98,11 @@ $sane = $LASTEXITCODE -eq 0
 if ($LASTEXITCODE -ne 0) { Fail "không tạo được $zip" }
 Remove-Item "${base}_submission.zip" -ErrorAction SilentlyContinue
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.Substring(0, 12)
+Copy-Item $pred, $log, $zip -Destination $runDir
+if ((Resolve-Path $Cache).Path -ne (Join-Path (Resolve-Path $runDir).Path "cache.sqlite")) {
+    Copy-Item $Cache -Destination "$runDir/cache.sqlite"
+}
+Write-Host "Sao lưu lần chạy: $runDir (pred, log, zip, cache.sqlite)"
 Write-Host ""
 Write-Host "Thời gian chạy: $minutes phút · commit $head · sha256 $hash"
 if ($sane) {

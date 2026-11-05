@@ -16,6 +16,7 @@ Mọi tham số chỉnh được qua biến môi trường RAG_* (để chạy a
     RAG_USE_ANCHORS=0      tắt Synthetic Question Anchors
     RAG_DYNAMIC_FEW_SHOT=1 ví dụ few-shot động từ train (Leave-One-Out)
     RAG_LOG_PATH=outputs/x_log.jsonl  ghi log từng câu (sự cố, fallback, độ dài, latency)
+    RAG_CACHE_PATH=.cache/solution.sqlite  cache LLM; trỏ sang file mới = một lần chạy độc lập
 
 Chống lỗi (solution.resilience): mọi lời gọi gateway được thử lại khi lỗi tạm thời; bước nào hỏng hẳn
 thì dùng phương án dự phòng (câu hỏi gốc, thứ hạng local, trích đoạn đứng đầu), nên `run()` không bao giờ
@@ -75,6 +76,9 @@ class PipelineConfig:
     few_shot_style_only: bool = True  # bỏ ví dụ có đoạn đúng trùng các đoạn trong prompt
     n_retrieved: int = 10  # số id nộp để chấm retrieval
     log_path: str = ""  # RAG_LOG_PATH: file jsonl ghi log từng câu (rỗng = không ghi)
+    cache_path: str = (
+        ".cache/solution.sqlite"  # RAG_CACHE_PATH: cache của mọi lời gọi LLM/embedding
+    )
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
     @classmethod
@@ -98,7 +102,7 @@ class SolutionPipeline(RAGPipeline):
     def __init__(self, config: PipelineConfig | None = None, llm: LLMClient | None = None):
         self.config = config or PipelineConfig.from_env()
         self.llm_model = os.getenv("LLM_MODEL", "claude-haiku-5-5")
-        base = llm or LLMClient(cache_path=".cache/solution.sqlite")
+        base = llm or LLMClient(cache_path=self.config.cache_path)
         self.llm = base if isinstance(base, ResilientLLM) else ResilientLLM(base)
         self.embedder = GatewayEmbedder(self.llm, os.getenv("EMBEDDING_MODEL", "bge-m3"))
         self.rewriter = QueryRewriter(self.llm, self.llm_model, self.config.rewrite_prompt)
