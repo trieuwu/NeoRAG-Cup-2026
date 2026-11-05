@@ -1,0 +1,10 @@
+/* Bổ sung nhỏ cho bản React; token và component nằm trong s2b.css (bàn giao từ Claude Design). */
+html, body, #root { height: 100%; }
+body { background: #F5F6F9; }
+.s2b .msg { position: relative; }
+.s2b .answer { white-space: pre-wrap; }
+.s2b .send:disabled { opacity: .5; }
+/* panel 400px: 4 tab vừa một hàng, nhãn phễu không bị cắt, số liệu không xuống dòng */
+.s2b .panel .tab { padding: 0 8px; font-size: 13px; }
+.s2b .funnel__bar { min-width: fit-content; }
+.s2b .metric__v { font-size: 17px; }
