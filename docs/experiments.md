@@ -90,6 +90,35 @@ Tiêu chí giữ (đặt trước): ROUGE-L +2.0, SP không giảm, Groundedness
 Chi phí ước tính: 3 biến thể `--no-judge` ~380 lời gọi (~$0.1); judge đủ 126 câu cho E7 (84 câu chưa có cache), G2,
 G3 (~$0.5 theo giá niêm yết).
 
+### E10 (nhánh `test/bo-do-hard-dev`): thước đo hard-dev sinh từ corpus, KHÔNG DÙNG ĐƯỢC → bỏ vòng lặp Pha 2
+
+Mục tiêu: một bộ đo retrieval gần Public hơn train (khoảng hụt E7: train 98.59, Public 93.80) để chạy vòng lặp tăng
+điểm có kiểm soát. Tiêu chí đặt trước: retrieval E7 trên hard-dev phải thấp hơn train ít nhất 3 điểm, nếu không thì
+thước đo vô dụng.
+
+Cách tạo (`python -m solution harddev`, `src/solution/harddev.py`): 130 nhóm 1-3 đoạn chọn bằng luật cố định
+(so sánh 2 CLB cùng chủ đề, nhiều đoạn cùng CLB gần nhau theo bge-m3, câu có mốc thời gian), Haiku viết câu hỏi kiểu
+sinh viên (một nửa không dấu/viết tắt), một lời gọi Haiku độc lập kiểm tra trên nhóm + 6 đoạn gây nhiễu gần nhất. Giữ
+71/130 câu có tập đoạn cần trùng khớp nhóm gốc (loại 54 thừa/sai đoạn, 4 thiếu đoạn, 1 không viết được). Không dùng
+câu Public/Private. File: `data/solution/hard_dev.jsonl`.
+
+| E7 | Pool | R@pool | R@5 | MRR@5 | NDCG@5 | Retrieval |
+|---|---:|---:|---:|---:|---:|---:|
+| train (122 câu) | 20 | 98.36 | 97.68 | 100 | 98.11 | 98.59 |
+| stress (122 câu) | 20 | 98.09 | 97.40 | 97.40 | 96.08 | 96.96 |
+| **hard-dev (71 câu)** | 20 | 99.30 | 99.30 | 98.59 | 98.16 | **98.68** |
+
+Theo loại (R@5 / NDCG@5): thời gian 1.00/0.99, nhiều đoạn 1.00/0.99, so sánh 0.97/0.95.
+
+**Kết luận: hard-dev KHÔNG khó hơn train (98.68 so với 98.59) → thước đo vô dụng, bỏ vòng lặp Pha 2, giữ E7.**
+Nguyên nhân: câu hỏi do Haiku viết từ chính các đoạn đúng và được Haiku kiểm tra lại, nên dùng đúng từ khóa/thực thể
+của đoạn; reranker cũng là Haiku nên dễ nhận ra. Câu Public khó vì diễn đạt của người thật lệch khỏi từ ngữ tài liệu,
+điều mà sinh tự động từ corpus không tái tạo được. Cả ba bộ đo nội bộ (train, stress, hard-dev) đều ở mức 97-99:
+không còn tín hiệu nào để tối ưu retrieval mà không nhìn vào câu Public.
+
+Chi phí (đếm token thật của request ra gateway, giá niêm yết Haiku): sinh + lọc 259 lời gọi, 469k token vào, 196k
+token ra ≈ $0.145; bench E7 trên hard-dev 142 lời gọi ≈ $0.095. **Lũy kế Pha 2: ≈ $0.24** (ngân sách $1.2).
+
 ### Ablation E6
 
 **Bài học từ Public (82.84 < 83.55):** anchors không giúp retrieval Public (Recall@5 giữ nguyên, MRR/NDCG giảm nhẹ);
