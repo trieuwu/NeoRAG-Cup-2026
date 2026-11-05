@@ -97,6 +97,7 @@ export function useChat() {
           } else {
             const wait = (shownAt[ev.data.name] ?? 0) + MIN_STAGE_MS - Date.now()
             if (wait > 0 && !reducedMotion()) await sleep(wait)
+            if (!live()) return // đã Dừng trong lúc chờ
             patchBot(botId, (b) => {
               const steps = [...b.steps]
               const stepMs = [...b.stepMs]
@@ -109,6 +110,7 @@ export function useChat() {
         } else if (ev.event === 'token') {
           const now = Date.now()
           if (now - lastToken < TOKEN_GAP_MS && !reducedMotion()) await sleep(TOKEN_GAP_MS)
+          if (!live()) return
           lastToken = Date.now()
           patchBot(botId, (b) => ({
             ...b,
