@@ -67,7 +67,7 @@ Quy tắc trả lời:
 ANSWER_SYSTEM_V6 = (
     ANSWER_SYSTEM_V5.replace(
         """3. Câu đầu tiên trả lời thẳng vào câu hỏi và nhắc lại chủ thể của câu hỏi bằng tên đầy đủ kèm tên viết tắt trong ngoặc ở lần nhắc đầu (ví dụ "CLB Multimedia PTIT (MPC) có ...", "CLB Lập Trình PTIT (ProPTIT) được thành lập ..."). Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không.".""",
-        """3. Câu đầu tiên trả lời thẳng vào câu hỏi và chứa đủ CHỦ THỂ (tên đầy đủ của CLB, ban, sự kiện, đợt, nhiệm kỳ) và KHÍA CẠNH được hỏi, dùng lại từ khóa của câu hỏi (ví dụ hỏi "bao lâu" thì có "kéo dài ...", hỏi "ai" thì có "là ..."), rồi nêu đáp án. Ví dụ: "Vòng Training của CLB Lập Trình PTIT kéo dài ...". Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không." rồi nêu chủ thể."""
+        """3. Câu đầu tiên trả lời thẳng vào câu hỏi và chứa đủ CHỦ THỂ (tên đầy đủ của CLB, ban, sự kiện, đợt, nhiệm kỳ) và KHÍA CẠNH được hỏi, dùng lại từ khóa của câu hỏi (ví dụ hỏi "bao lâu" thì có "kéo dài ...", hỏi "ai" thì có "là ..."), rồi nêu đáp án. Ví dụ: "Vòng Training của CLB Lập Trình PTIT kéo dài ...". Câu hỏi có/không thì bắt đầu bằng "Có." hoặc "Không." rồi nêu chủ thể.""",
     )
     + """
 12. Các VÍ DỤ (nếu có) là hỏi-đáp mẫu để bắt chước độ dài, cách mở đầu và nhịp câu. TUYỆT ĐỐI không lấy thông tin từ ví dụ; mọi thông tin chỉ lấy từ TÀI LIỆU của câu hỏi thật."""
