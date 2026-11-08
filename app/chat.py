@@ -1,7 +1,7 @@
 """Chatbot mẫu cho phần Demo Product. Chạy: python -m streamlit run app/chat.py
 
-Đổi pipeline bằng biến môi trường NEORAG_PIPELINE="module.path:ClassName".
-Đây chỉ là điểm khởi đầu: giao diện, streaming, lịch sử hội thoại... là phần bạn tự cải thiện.
+Giao diện dự phòng (giao diện chính dùng app/api.py). Mặc định chạy SolutionPipeline (bản E7);
+đổi pipeline bằng biến môi trường NEORAG_PIPELINE="module.path:ClassName".
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import streamlit as st
 from neorag.data import load_corpus
 from neorag.pipelines import load_pipeline
 
-PIPELINE = os.getenv("NEORAG_PIPELINE", "neorag.pipelines.baseline:BaselinePipeline")
+PIPELINE = os.getenv("NEORAG_PIPELINE", "solution.pipeline:SolutionPipeline")
 
 st.set_page_config(page_title="NeoRAG Chatbot - S2B", page_icon="💬")
 st.title("💬 Hỏi đáp cộng đồng S2B")

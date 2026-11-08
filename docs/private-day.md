@@ -89,6 +89,6 @@ mục `outputs/private_runs/<HHMM>/` của file đó (cache + log) để đối 
 
 | Mục | Kết quả |
 |---|---|
-| Commit gắn tag `private-final` | ghi sau khi diễn tập (xem báo cáo CHECKPOINT B) |
+| Commit gắn tag `private-final` | **`2d18a31`** (main sau PR #10; PR sau đó chỉ sửa docs) |
 | Diễn tập clone sạch, `-Cache` = cache E7 | khớp file Public E7 42/42, sanity xanh |
-| Diễn tập clone sạch, cache mới (một lần rút) | sanity xanh, 0 fallback; số liệu trong `docs/experiments.md` |
+| Diễn tập clone sạch, cache mới (một lần rút) | 5.3 phút, sanity xanh, 0 fallback, latency median 7.3s |

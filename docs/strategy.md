@@ -73,9 +73,9 @@ Cấm: chèn chỉ dẫn hay nhãn chấm vào câu trả lời nhằm tác đ�
 
 | # | Phương án | Trạng thái |
 |---|---|---|
-| D1 | Chatbot hiển thị nguồn trích dẫn (CLB, chủ đề, đoạn văn) cho mỗi câu trả lời | 🔜 |
-| D2 | Hiển thị câu hỏi đã được hiểu (bản viết lại) và latency | 🔜 |
-| D3 | Streaming câu trả lời (giảm thời gian chờ cảm nhận) | 🔜 |
+| D1 | Chatbot hiển thị nguồn trích dẫn (CLB, chủ đề, đoạn văn) cho mỗi câu trả lời | ✅ API: trích dẫn `[n]` + citations |
+| D2 | Hiển thị câu hỏi đã được hiểu (bản viết lại) và latency | ✅ API: trace (viết lại, viết tắt, ứng viên, thời gian, chi phí) |
+| D3 | Streaming câu trả lời (giảm thời gian chờ cảm nhận) | ✅ SSE, token đầu ~1.4 s |
 | D4 | Hội thoại nhiều lượt: viết lại câu hỏi kèm lịch sử ("thế còn MPC thì sao?") | 🧪 |
 | D5 | Câu hỏi gợi ý, lọc theo CLB, giao diện riêng (Streamlit có theme hoặc FastAPI + React) | 🧪 |
 | D6 | Cache câu trả lời + chạy sẵn index khi khởi động để demo mượt | 🔜 |
@@ -87,9 +87,9 @@ Cấm: chèn chỉ dẫn hay nhãn chấm vào câu trả lời nhằm tác đ�
 | T1 | Code thí sinh tách riêng `src/solution/`, cấu hình qua dataclass + biến môi trường | ✅ |
 | T2 | Unit test offline cho từng thành phần, CI GitHub Actions (ruff + pytest) | ✅ |
 | T3 | Conventional Commits, nhánh theo tính năng, PR có bảng số liệu, tag mốc | ✅ ([git-workflow.md](git-workflow.md)) |
-| T4 | README của repo: kiến trúc, cách chạy pipeline và chatbot, kết quả | 🔜 |
+| T4 | README của repo: kiến trúc, cách chạy pipeline và chatbot, kết quả | ✅ |
 | T5 | Sổ thực nghiệm có commit SHA cho từng kết quả | ✅ |
-| T6 | Sơ đồ kiến trúc (cho README và slide) | 🔜 |
+| T6 | Sơ đồ kiến trúc (cho README và slide) | ✅ Mermaid trong README và [architecture.md](architecture.md) |
 
 ## 6. Pitching (25%)
 

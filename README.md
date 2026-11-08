@@ -2,85 +2,217 @@
 
 <img src="docs/assets/neorag-banner.png" alt="ProPTIT × NeoRAG Cup 2026" width="720">
 
-<p><a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/code-MIT-green" alt="License MIT"></a></p>
+# Hỏi đáp cộng đồng S2B bằng RAG
+
+Hệ thống Retrieval-Augmented Generation trả lời câu hỏi về CLB Lập Trình PTIT (ProPTIT), CLB Multimedia PTIT (MPC)
+và CLB Nhà Sáng Tạo Game PTIT (GCC), bài dự thi NeoRAG Cup 2026.
+
+<p><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"> <img src="https://img.shields.io/badge/LLM-claude--haiku--5--5-orange" alt="LLM"> <img src="https://img.shields.io/badge/Public%20Test-88.95-brightgreen" alt="Public 88.95"></p>
 
 </div>
 
-NeoRAG Cup 2026 là cuộc thi nội bộ do Team AI – CLB Lập Trình PTIT tổ chức. Thí sinh thiết kế và triển khai một hệ thống Retrieval-Augmented Generation (RAG) trả lời câu hỏi về cộng đồng S2B, gồm CLB Lập Trình PTIT (ProPTIT), CLB Multimedia PTIT (MPC) và CLB Nhà Sáng Tạo Game PTIT (GCC), sau đó trình bày sản phẩm trước Ban giám khảo.
+**Kết quả:** Public Test **88.95** (baseline 52.40, +36.6 điểm). Truy xuất 93.80, sinh câu trả lời 84.09. Mỗi câu hỏi
+dùng 3 lời gọi `claude-haiku-5-5`, chi phí ≈ $0.0017 và độ trễ ≈ 8 giây.
 
-Repository này cung cấp bộ dữ liệu, pipeline baseline, bộ chấm chính thức và một chatbot mẫu để tham khảo. Hướng dẫn cài đặt và sử dụng có trong tài liệu [Hướng dẫn sử dụng](docs/guide.md).
+Thể lệ, lịch và cách chấm của cuộc thi nằm ở [docs/cuoc-thi.md](docs/cuoc-thi.md).
 
-## Tổng quan
+## Mục lục
 
-| Hạng mục | Chi tiết |
-|---|---|
-| Hình thức | Thi cá nhân |
-| Đối tượng | Thành viên Team AI – CLB Lập Trình PTIT |
-| Thời gian | 19/10/2026 – 09/11/2026 |
-| Mô hình ngôn ngữ | `claude-haiku-5-5`, truy cập qua gateway của Ban tổ chức bằng key cá nhân |
-| Hệ thống chấm | [aichallenge.ptit.edu.vn](https://aichallenge.ptit.edu.vn/) |
-| Trang cuộc thi | [bit.ly/neorag2026](https://bit.ly/neorag2026) |
+1. [Kết quả](#1-kết-quả)
+2. [Kiến trúc](#2-kiến-trúc)
+3. [Các quyết định kỹ thuật](#3-các-quyết-định-kỹ-thuật)
+4. [Cài đặt](#4-cài-đặt)
+5. [Chạy pipeline và tái tạo kết quả](#5-chạy-pipeline-và-tái-tạo-kết-quả)
+6. [Chatbot](#6-chatbot)
+7. [Cấu trúc repository](#7-cấu-trúc-repository)
+8. [Hạn chế](#8-hạn-chế)
 
-## Tài liệu
+## 1. Kết quả
 
-| Tài liệu | Nội dung |
-|---|---|
-| [Hướng dẫn sử dụng](docs/guide.md) | Cài đặt môi trường, cấu hình key, chạy baseline, xây dựng pipeline và tạo bài nộp |
-| [Sử dụng gateway](docs/gateway.md) | Kết nối tới mô hình ngôn ngữ và embedding của cuộc thi, tra cứu ngân sách, giới hạn và mã lỗi |
-| [Quy định](docs/rules.md) | Mô hình được phép sử dụng, key và ngân sách, các hành vi bị cấm, xử lý vi phạm |
-| [Nộp bài](docs/submission.md) | Định dạng bài nộp, quy trình nộp Public Test và Private Test |
-| [Nộp bài trên aichallenge](docs/aichallenge.md) | Tạo tài khoản, đăng ký cuộc thi, nộp bài, đọc kết quả và xử lý lỗi trên hệ thống chấm |
-| [Đánh giá](docs/evaluation.md) | Định nghĩa các metric, công thức tính điểm và cách quy đổi theo baseline |
-| [Dữ liệu](data/README.md) | Mô tả corpus, bộ câu hỏi, nguồn và mức độ xác minh |
+Điểm = 0.5 × truy xuất (Recall@5, MRR@5, NDCG@5) + 0.5 × sinh câu trả lời (String Presence, ROUGE-L, Groundedness,
+Response Relevancy, 1 − Noise Sensitivity, Abstention). Chi tiết: [docs/evaluation.md](docs/evaluation.md).
 
-## Lịch trình
+| Phiên bản | Thay đổi chính | Public Test | Truy xuất | Sinh |
+|---|---|---:|---:|---:|
+| E0 | Baseline của BTC: dense bge-m3 top-5, prompt tối giản | 52.40 | 42.31 | 62.48 |
+| E3 | Viết lại câu hỏi + hybrid BM25/dense (RRF) + few-shot | 80.09 | 82.19 | 77.98 |
+| E4 | Tách câu hỏi con theo CLB + prompt trả lời ngắn | 82.28 | 82.68 | 81.89 |
+| E5 | Từ điển viết tắt PTIT, phân giải chữ không dấu | 83.55 | 83.67 | 83.43 |
+| E6 | Synthetic Question Anchors + few-shot động | 82.84 ↓ | 82.87 | 82.80 |
+| **E7** | **E5 + rerank listwise bằng Haiku** | **88.95** | **93.80** | **84.09** |
 
-| Giai đoạn | Thời gian | Nội dung |
+Chi tiết E7 trên Public Test: Recall@5 91.59 · MRR@5 97.62 · NDCG@5 92.20 · String Presence 88.46 · ROUGE-L 58.50 ·
+Groundedness 100 · Relevancy 60.17 · 1 − Noise 97.44 · Abstention 100.
+
+Trên bộ train (126 câu, có judge), E7 đạt 92.36. Mọi lần chạy, kể cả những lần thất bại, đều ghi trong
+[docs/experiments.md](docs/experiments.md) kèm commit SHA, metric và chi phí.
+
+## 2. Kiến trúc
+
+```mermaid
+flowchart LR
+    Q([Câu hỏi]) --> RW["Viết lại câu hỏi<br/>Haiku: thêm dấu, mở rộng viết tắt,<br/>nhận diện CLB, tách câu hỏi con"]
+    RW --> BM["BM25 trên văn bản bỏ dấu<br/>(câu gốc + viết tắt mở rộng + bản viết lại)"]
+    RW --> DE["Dense bge-m3<br/>(bản viết lại, câu gốc, câu hỏi con)"]
+    BM --> RRF["Gộp RRF<br/>+ ưu tiên đúng CLB"]
+    DE --> RRF
+    RRF -->|top-20| RR["Rerank listwise<br/>Haiku chọn ≤ 8 đoạn"]
+    RR --> F2["Gộp RRF lần hai<br/>(w_rerank = 4)"]
+    F2 --> DV["Đa dạng hóa:<br/>mỗi CLB được hỏi có ≥ 1 đoạn top-5"]
+    DV -->|10 id| OUT1[(retrieved_ids)]
+    DV -->|top-5 đoạn| GEN["Sinh câu trả lời<br/>Haiku, prompt v5 + 4 ví dụ few-shot"]
+    GEN --> OUT2[(answer)]
+```
+
+| Bước | Module | Lời gọi gateway |
 |---|---|---|
-| Khởi động | 19/10 – 25/10 | Công bố thể lệ, cấp repository và key cho thí sinh |
-| Public Test | 26/10 – 07/11 | Nộp bài và theo dõi bảng xếp hạng công khai; tổ chức talkshow chia sẻ kinh nghiệm |
-| Private Test | 08/11 | Đánh giá trên bộ câu hỏi mới; kết quả dùng để tính điểm Benchmark |
-| Pitching | Thông báo sau | 20 phút trình bày và demo, 10 phút hỏi đáp với Ban giám khảo |
+| Viết lại câu hỏi | [`src/solution/query.py`](src/solution/query.py) | 1 chat |
+| BM25 + dense + RRF + ưu tiên CLB | [`src/solution/retrieval.py`](src/solution/retrieval.py), [`bm25.py`](src/solution/bm25.py), [`textproc.py`](src/solution/textproc.py) | embedding câu hỏi |
+| Rerank listwise | [`src/solution/rerank.py`](src/solution/rerank.py) | 1 chat |
+| Sinh câu trả lời | [`src/solution/prompts.py`](src/solution/prompts.py) | 1 chat |
+| Ghép pipeline, cấu hình `RAG_*` | [`src/solution/pipeline.py`](src/solution/pipeline.py) | |
+| Chống lỗi gateway, output luôn hợp lệ | [`src/solution/resilience.py`](src/solution/resilience.py) | |
+| Trace và stream cho chatbot | [`src/solution/trace.py`](src/solution/trace.py), [`app/api.py`](app/api.py) | |
 
-## Yêu cầu sản phẩm
+Tài liệu đầy đủ (luồng dữ liệu, cấu hình, cache, xử lý lỗi, chi phí): [docs/architecture.md](docs/architecture.md).
 
-Mỗi thí sinh hoàn thành các hạng mục sau:
+## 3. Các quyết định kỹ thuật
 
-1. Pipeline RAG hoàn chỉnh, từ xử lý dữ liệu, indexing, truy xuất đến sinh câu trả lời.
-2. Bài nộp Public Test và Private Test trên hệ thống chấm.
-3. Giao diện chatbot hỏi đáp thông tin các CLB, xây dựng bằng công nghệ tùy chọn.
-4. Bài trình bày về kiến trúc, các quyết định kỹ thuật và kết quả đánh giá, kèm demo tại buổi pitching.
+Mỗi quyết định đều có số liệu ablation, đo bằng `python -m solution bench` (truy xuất) hoặc
+`neorag run train --no-judge` (sinh câu trả lời).
 
-## Đánh giá
-
-| Tiêu chí | Trọng số | Nội dung đánh giá |
-|---|---:|---|
-| Benchmark | 40% | Kết quả trên Private Test, chấm bằng bộ chấm chính thức |
-| Pitching | 25% | Mức độ hiểu sản phẩm, khả năng giải thích các quyết định kỹ thuật, trình bày và trả lời câu hỏi |
-| Technical | 20% | Kiến trúc hệ thống, quản lý mã nguồn với Git, chất lượng và cách tổ chức code |
-| Demo Product | 15% | Giao diện, tốc độ phản hồi và trải nghiệm người dùng |
-
-Điểm Benchmark đánh giá đồng thời chất lượng truy xuất và chất lượng câu trả lời, mỗi phần chiếm một nửa. Điểm trên bảng xếp hạng được quy đổi theo baseline của Ban tổ chức: bài nộp không vượt ngưỡng (điểm baseline cộng 1) nhận 0 điểm, bài nộp cao nhất nhận 100 điểm. Kết quả chung cuộc chỉ tính theo Private Test; Public Test dùng để thử nghiệm. Chi tiết xem tài liệu [Đánh giá](docs/evaluation.md).
-
-## Giải thưởng
-
-| Giải | Giá trị |
-|---|---:|
-| Giải Nhất | 200.000 VNĐ |
-| Giải Nhì | 150.000 VNĐ |
-| Giải Ba | 100.000 VNĐ |
-| Giải Tiềm năng | 50.000 VNĐ |
-
-Mỗi giải thưởng kèm giấy chứng nhận của Ban tổ chức.
-
-## Liên hệ
-
-Mọi thắc mắc về cuộc thi xin liên hệ Ban tổ chức.
-
-| Người phụ trách | Email | Facebook |
+| Quyết định | Vì sao | Tác dụng đo được |
 |---|---|---|
-| Hoàng Đỗ | [dekthedev.business@gmail.com](mailto:dekthedev.business@gmail.com) | [fb.com/dekthedev](http://fb.com/dekthedev) |
+| Viết lại câu hỏi bằng Haiku | 26/126 câu train viết không dấu hoặc viết tắt (`dpt`, `mm`, `hv`); baseline chỉ đạt Recall@5 0.44 ở nhóm này | Viết lại + hybrid (E0 → E1): truy xuất train 72.2 → 85.7 |
+| BM25 trên văn bản **bỏ dấu** | Câu hỏi không dấu vẫn khớp từ khóa với tài liệu có dấu | Một trong hai nguồn tín hiệu của RRF |
+| Gộp bằng **RRF** thay vì cộng điểm | BM25 và cosine khác thang đo; RRF chỉ dùng thứ hạng nên không cần chuẩn hóa | Ổn định khi đổi trọng số |
+| Tách câu hỏi con theo từng CLB | Câu so sánh cần đoạn của cả hai CLB | Truy xuất +2.0 (E4) |
+| **Rerank listwise bằng Haiku** | Đọc câu hỏi cùng 20 ứng viên một lúc, phân biệt đúng CLB, đối tượng, mốc thời gian | Public +5.4 (truy xuất +10.1), lớn nhất cả dự án (E7) |
+| Prompt trả lời ngắn + few-shot tĩnh | Đáp án chuẩn dài ~200 ký tự; câu dài làm giảm ROUGE-L và tăng Noise | ROUGE-L Public 52.96 → 60.87 (E3 → E4) |
+| Từ chối theo một câu chuẩn | Câu không có trong tài liệu (~8%) phải nói rõ là không có thông tin | Abstention 100 trên Public |
+| Không chunking | Mỗi đoạn trong corpus (~380 ký tự) đã tự đủ ngữ cảnh, và metric chấm theo id đoạn gốc | |
 
-## Giấy phép
+Đã thử nhưng **không giữ**, vì tăng trên train mà không tăng trên Public, hoặc trượt tiêu chí đặt trước:
 
-Mã nguồn được phát hành theo [giấy phép MIT](LICENSE). Bộ dữ liệu chỉ được sử dụng cho mục đích học tập trong khuôn khổ NeoRAG Cup 2026; bản quyền nội dung gốc thuộc về các CLB và các nguồn được ghi trong `data/sources.csv`.
+| Thử nghiệm | Kết quả | Bài học |
+|---|---|---|
+| E6: anchors (Haiku sinh câu hỏi giả định cho từng đoạn) + few-shot động | Train +3.2, **Public −0.7** | Tối ưu theo train dễ overfit; chỉ tin cải tiến không dựa vào train |
+| E8: mở rộng tập ứng viên rerank 20 → 30 | Bộ stress chỉ +0.2 (tiêu chí +1) | Pool 20 đã chứa 98% đoạn đúng |
+| E9: prompt theo khuôn câu của đáp án chuẩn | ROUGE-L +2.1 nhưng Groundedness −2.2 | Tăng metric chép chữ đổi lấy giảm metric judge |
+| E10: bộ đo hard-dev sinh từ corpus | Không khó hơn train (98.68 so với 98.59) | Câu hỏi do LLM sinh từ chính tài liệu thì quá dễ cho reranker LLM |
+
+## 4. Cài đặt
+
+Cần Python 3.10 trở lên và key gateway do BTC cấp. Không cần GPU: cả LLM lẫn embedding bge-m3 đều gọi qua gateway.
+
+```bash
+git clone https://github.com/trieuwu/NeoRAG-Cup-2026.git && cd NeoRAG-Cup-2026
+python -m venv .venv
+.venv\Scripts\Activate.ps1            # macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements.lock.txt && python -m pip install --no-deps -e .   # đúng phiên bản đã kiểm chứng
+# hoặc bản mới nhất: python -m pip install -e ".[app,api,dev]"
+copy .env.example .env                # điền key vào .env (không commit file này)
+```
+
+Hướng dẫn chi tiết về môi trường và gateway: [docs/guide.md](docs/guide.md), [docs/gateway.md](docs/gateway.md).
+
+## 5. Chạy pipeline và tái tạo kết quả
+
+```bash
+neorag run train --no-judge --pipeline solution.pipeline:SolutionPipeline    # train: truy xuất + SP + ROUGE-L, không tốn judge
+neorag run public_test --pipeline solution.pipeline:SolutionPipeline         # tạo file nộp Public
+python -m solution bench [--set train|stress|harddev]                         # ablation truy xuất
+python -m pytest                                                              # test offline, không cần key
+```
+
+**Private Test**, chạy bằng một lệnh từ tag `private-final`. Kịch bản đầy đủ của ngày thi nằm trong
+[docs/private-day.md](docs/private-day.md).
+
+```powershell
+git checkout private-final
+powershell -ExecutionPolicy Bypass -File scripts\run_private.ps1     # Linux/macOS: bash scripts/run_private.sh
+```
+
+Script kiểm tra tag, working tree và file câu hỏi; nạp cấu hình đóng băng [`configs/private.env`](configs/private.env);
+chạy; validate; sanity check so với lần chạy tham chiếu; rồi xuất `outputs/private_<HHMM>.zip`.
+
+**Tái tạo đúng file đã nộp.** Haiku không cho phép đặt temperature nên kết quả thay đổi giữa các lần chạy không có
+cache: hai lần chạy độc lập chỉ trùng tập top-5 ở khoảng một nửa số câu. Mọi lời gọi LLM được cache trong SQLite
+(`.cache/solution.sqlite`, hoặc `outputs/<bộ>_runs/<HHMM>/cache.sqlite` cho mỗi lần chạy Private). Chạy lại với cùng
+cache sẽ ra kết quả trùng 100%; kiểm tra bằng
+`python scripts/compare_predictions.py <file tham chiếu> <file mới>`.
+
+Tham số pipeline đổi qua biến môi trường `RAG_*` mà không cần sửa code. Danh sách đầy đủ nằm trong docstring của
+[`src/solution/pipeline.py`](src/solution/pipeline.py).
+
+## 6. Chatbot
+
+```bash
+uvicorn app.api:app --port 8000                    # API cho giao diện (FastAPI + Server-Sent Events)
+python -m streamlit run app/chat.py                # giao diện dự phòng
+```
+
+`POST /api/chat` với body `{"message": "...", "cite": true}` (1–500 ký tự sau khi bỏ khoảng trắng hai đầu, sai thì
+HTTP 422) trả về luồng **SSE** (`text/event-stream`, đọc bằng `fetch` + `ReadableStream` vì là POST):
+
+| Sự kiện | Dữ liệu | Khi nào |
+|---|---|---|
+| `stage` | `{name: rewrite\|retrieve\|rerank\|generate, status: start\|done, ms}` | đầu và cuối mỗi bước (`ms` chỉ có ở `done`) |
+| `token` | `{text}` | từng phần câu trả lời |
+| `incident` | `{type: "retry", stage, attempt, wait_s}` | gateway lỗi tạm thời (429, timeout, 5xx), sắp thử lại sau `wait_s` giây |
+| `incident` | `{type: "fallback", stage, attempt: null, wait_s: null, error}` | một bước đã chuyển sang phương án dự phòng |
+| `ping` | `{}` | mỗi 5 giây khi chưa có sự kiện mới (ví dụ lúc chờ thử lại) |
+| `done` | xem dưới | kết thúc |
+| `error` | `{message}` | lỗi không lường trước (thay cho `done`) |
+
+`done` gồm `answer` (có `[n]` khi `cite=true`), `abstained`, `citations[{n, id, club, topic, text, score, cited}]`,
+`retrieved_ids`, `latency_ms` và `trace`:
+- `original_query`, `rewritten_query`, `clubs`, `sub_queries`, `expansions[{from, to}]`;
+- `candidates[{id, club, topic, bm25_rank, dense_rank, rerank_rank, selected}]`: 20 ứng viên đưa vào rerank;
+  hạng là `null` nếu đoạn không có trong danh sách đó;
+- `stages[{name, ms}]`, `llm_calls`, `llm_cache_hits`, `cache_hit` (mọi lời gọi đều trúng cache), `tokens{in, out,
+  estimated}`, `cost_usd` (ước tính theo giá niêm yết), `incidents`.
+
+Một số lưu ý cho giao diện:
+- `abstained` chỉ là `true` khi câu đầu tiên là câu từ chối VÀ câu trả lời không có trích dẫn `[n]` nào. Câu trả
+  lời một phần, kiểu "... [1]. Tài liệu không đề cập ...", cho `false`.
+- `citations` luôn là 5 đoạn gần nhất, kể cả khi từ chối.
+- Client ngắt kết nối (bấm Dừng) thì pipeline dừng ở ranh giới bước kế tiếp hoặc ở token kế tiếp, và không gửi
+  `done`.
+- Server không lưu lịch sử hội thoại: mỗi request độc lập.
+- CORS mặc định mở mọi origin, đổi bằng `NEORAG_CORS_ORIGINS`.
+- Hỏi lại một câu đã hỏi thì trả lời ngay (`cache_hit: true`, $0). Câu mới tốn khoảng $0.002.
+
+Các endpoint khác: `GET /api/suggestions`, `GET /api/doc/{id}`, `GET /api/health`. Chế độ trích dẫn chỉ áp dụng cho
+chatbot; file nộp bài đi qua `SolutionPipeline.run` và có test bảo đảm kết quả không đổi. Mã giao diện đặt trong
+[`web/`](web/).
+
+## 7. Cấu trúc repository
+
+```
+src/solution/      pipeline của đội: query, retrieval, rerank, prompts, pipeline, resilience, trace, bench
+src/neorag/        mã của BTC (bộ chấm, CLI, baseline) — không sửa
+app/               api.py (FastAPI + SSE), chat.py (Streamlit)
+web/               giao diện chatbot (frontend riêng, gọi app/api.py)
+scripts/           run_private.ps1/.sh, sanity_check.py, compare_predictions.py, install.py
+configs/           private.env (cấu hình đóng băng), sanity_reference.json, eval.toml (của BTC)
+data/              corpus.jsonl (118 đoạn), train/, public_test/, solution/ (anchors, hard-dev)
+docs/              architecture, experiments, strategy, private-day, git-workflow, tài liệu BTC
+tests/             test offline: pipeline, mô phỏng lỗi gateway, API, sanity check
+```
+
+Quy trình Git: Conventional Commits, mỗi thay đổi một nhánh và một PR có bảng số liệu, CI chạy ruff và pytest
+([docs/git-workflow.md](docs/git-workflow.md)).
+
+## 8. Hạn chế
+
+- **Response Relevancy (~60 trên Public) gần như chạm trần.** Metric so cosine giữa câu hỏi gốc và câu hỏi mà judge
+  sinh ngược từ câu trả lời. Với câu hỏi không dấu, câu do judge sinh ra luôn có dấu, nên cosine thấp bất kể câu trả
+  lời đúng hay sai. Cách "ăn" điểm (trả lời không dấu, lặp từ khóa) vi phạm quy chế nên không làm.
+- **Kết quả không tất định.** Không đặt được temperature, nên mỗi lần chạy không cache là một lần rút. Cache và log
+  của từng lần chạy được giữ lại để đối chiếu.
+- **Phụ thuộc gateway.** Gateway lỗi thì pipeline chuyển sang thứ hạng local và trích đoạn văn: vẫn ra output hợp lệ
+  nhưng chất lượng thấp hơn; sanity check báo đỏ để chạy lại.
+- **Độ trễ ~8 giây mỗi câu** vì có 3 lời gọi LLM tuần tự. Chatbot giảm thời gian chờ cảm nhận bằng streaming và cache.
+- Bộ đo nội bộ (train, stress, hard-dev) đều đã ở mức 97–99 điểm truy xuất, nên khó đo thêm cải tiến mà không nhìn
+  vào đề Public.
