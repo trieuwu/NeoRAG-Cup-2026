@@ -47,3 +47,4 @@ web/build/
 web/.next/
 web/.env*
 web/*.log
+web/*.tsbuildinfo

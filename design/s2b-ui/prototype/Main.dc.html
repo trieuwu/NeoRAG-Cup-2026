@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>S2B Hỏi Đáp — Prototype</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="s2b.css">
+<script src="s2b-data.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="s2b app" data-theme="{{theme}}" data-collapsed="{{collapsedAttr}}" data-drawer="{{drawerAttr}}" data-panel="{{panelAttr}}" data-sheet="{{sheetAttr}}" tabindex="-1" ref="{{setRoot}}" onKeyDown="{{onRootKey}}">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" aria-label="Thanh bên">
+    <div class="sb-head">
+      <span class="logo"><b>S2B</b><span class="sb-hide-collapsed"> Hỏi Đáp</span></span>
+      <button class="btn btn--ghost btn--icon sb-collapse-btn" aria-label="Thu gọn hoặc mở rộng thanh bên" onClick="{{toggleCollapse}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM9 5v14"/></svg></button>
+    </div>
+    <button class="btn btn--primary newchat" onClick="{{newChat}}" aria-label="Cuộc trò chuyện mới"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="sb-hide-collapsed">Cuộc trò chuyện mới</span></button>
+
+    <nav class="history sb-hide-collapsed" aria-label="Lịch sử trò chuyện">
+      <sc-if value="{{noHistory}}" hint-placeholder-val="{{false}}"><p class="empty-note">Chưa có cuộc trò chuyện nào.</p></sc-if>
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+        <div class="grp">
+          <h2 class="grp__label">{{g.label}}</h2>
+          <sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+            <div class="conv {{it.cls}}">
+              <sc-if value="{{it.renaming}}" hint-placeholder-val="{{false}}"><input class="rename" value="{{it.renameVal}}" onChange="{{it.onRenameChange}}" onKeyDown="{{it.onRenameKey}}" onBlur="{{it.commitRename}}" aria-label="Tên cuộc trò chuyện" autoFocus="{{true}}"></sc-if>
+              <sc-if value="{{it.notRenaming}}" hint-placeholder-val="{{true}}">
+                <button class="conv__btn" onClick="{{it.select}}" aria-current="{{it.current}}"><span class="conv__title">{{it.title}}</span></button>
+                <button class="conv__more" aria-label="Tùy chọn cuộc trò chuyện" aria-haspopup="menu" aria-expanded="{{it.menuOpen}}" onClick="{{it.toggleMenu}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width:2.6"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button>
+              </sc-if>
+              <sc-if value="{{it.menuOpen}}" hint-placeholder-val="{{false}}">
+                <div class="popover" role="menu">
+                  <button class="menu__item" role="menuitem" onClick="{{it.rename}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>Đổi tên</button>
+                  <button class="menu__item menu__item--danger" role="menuitem" onClick="{{it.ask}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Xóa</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div class="demo sb-hide-collapsed">
+      <button class="demo__toggle" aria-expanded="{{demoOpen}}" onClick="{{toggleDemo}}"><span>Mô phỏng tình huống</span><span class="badge club--nodau">demo</span></button>
+      <sc-if value="{{demoOpen}}" hint-placeholder-val="{{false}}">
+        <div class="demo__list">
+          <button class="demo__item" onClick="{{demoAbstain}}">Câu hỏi ngoài tài liệu</button>
+          <button class="demo__item" onClick="{{demo429}}">Lỗi quá tải (429)</button>
+          <button class="demo__item" onClick="{{demoTimeout}}">Hết thời gian chờ</button>
+          <button class="demo__item" onClick="{{demoOffline}}">Mất kết nối</button>
+          <button class="demo__item" onClick="{{demoLong}}">Câu trả lời dài</button>
+        </div>
+      </sc-if>
+    </div>
+
+    <div class="sb-foot">
+      <button class="switch" role="switch" aria-checked="{{isDark}}" aria-label="Giao diện tối" onClick="{{toggleTheme}}"><span class="switch__l"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><span class="sb-hide-collapsed">Giao diện tối</span></span><span class="switch__track"></span></button>
+      <button class="switch" role="switch" aria-checked="{{tech}}" aria-label="Chế độ kỹ thuật" onClick="{{toggleTech}}"><span class="switch__l"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h2a2 2 0 0 1 2 2V14"/></svg><span class="sb-hide-collapsed">Chế độ kỹ thuật</span></span><span class="switch__track"></span></button>
+    </div>
+  </aside>
+
+  <div class="scrim" onClick="{{closeOverlays}}"></div>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <sc-if value="{{offline}}" hint-placeholder-val="{{false}}">
+      <div class="banner" role="status"><span class="spinner"></span>Mất kết nối. Đang thử kết nối lại…</div>
+    </sc-if>
+    <header class="topbar">
+      <button class="btn btn--ghost btn--icon only-lt-xl" aria-label="Mở thanh bên" onClick="{{openDrawer}}"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <span class="topbar__title">{{convTitle}}</span>
+      <span class="grow"></span>
+      <span class="badge club--nodau fake-pill">Dữ liệu giả<span class="long"> · Prototype</span></span>
+      <button class="btn btn--ghost btn--icon only-lt-xl" aria-label="Cuộc trò chuyện mới" onClick="{{newChat}}"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    </header>
+
+    <div class="scroll" ref="{{setScroll}}">
+      <div class="col">
+
+        <!-- 4.1 Màn trống -->
+        <sc-if value="{{isEmpty}}" hint-placeholder-val="{{true}}">
+          <section class="hero">
+            <h1>Hỏi gì về S2B cũng được.</h1>
+            <p>Câu trả lời dựa trên tài liệu chính thức của ProPTIT, Multimedia và GCC, kèm nguồn để bạn kiểm chứng.</p>
+            <div class="chips" role="group" aria-label="Lọc theo câu lạc bộ">
+              <sc-for list="{{filterChips}}" as="c" hint-placeholder-count="4"><button class="chip {{c.cls}}" aria-pressed="{{c.active}}" onClick="{{c.pick}}"><sc-if value="{{c.hasDot}}" hint-placeholder-val="{{false}}"><span class="dot"></span></sc-if>{{c.label}}</button></sc-for>
+            </div>
+            <div class="suggest-grid">
+              <sc-for list="{{suggestions}}" as="q" hint-placeholder-count="6">
+                <button class="suggest {{q.cls}}" onClick="{{q.ask}}"><span class="badge">{{q.badge}}</span><span class="suggest__q">{{q.q}}</span></button>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- Hội thoại -->
+        <div aria-live="polite" aria-label="Hội thoại">
+          <sc-for list="{{msgs}}" as="m" hint-placeholder-count="2">
+
+            <sc-if value="{{m.isUser}}" hint-placeholder-val="{{false}}">
+              <div class="msg"><div class="bubble">{{m.text}}</div></div>
+            </sc-if>
+
+            <sc-if value="{{m.isBot}}" hint-placeholder-val="{{true}}">
+              <div class="msg">
+
+                <!-- thanh 4 bước -->
+                <sc-if value="{{m.showSum}}" hint-placeholder-val="{{false}}">
+                  <button class="steps-sum" aria-expanded="{{m.open}}" onClick="{{m.toggleSteps}}"><span class="ok">✓</span><span class="mono">{{m.sumText}}</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+                </sc-if>
+                <sc-if value="{{m.showSteps}}" hint-placeholder-val="{{true}}">
+                  <div class="steps" role="group" aria-label="Tiến trình xử lý">
+                    <sc-for list="{{m.steps}}" as="st" hint-placeholder-count="4">
+                      <div class="step {{st.cls}}">
+                        <div class="step__top">
+                          <span class="step__ico"><sc-if value="{{st.isRun}}" hint-placeholder-val="{{false}}"><span class="spinner"></span></sc-if><sc-if value="{{st.isDone}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></sc-if><sc-if value="{{st.isErr}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></sc-if><sc-if value="{{st.isPend}}" hint-placeholder-val="{{true}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="{{st.icon}}"/></svg></sc-if></span>
+                          <span class="step__label">{{st.label}}</span>
+                        </div>
+                        <span class="step__time">{{st.time}}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <!-- lỗi -->
+                <sc-if value="{{m.showErr}}" hint-placeholder-val="{{false}}">
+                  <div class="errcard" role="alert">
+                    <span class="errcard__ico"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+                    <div class="errcard__text">{{m.errText}}<div class="errcard__sub">{{m.errSub}}</div></div>
+                    <button class="btn btn--outline btn--sm" onClick="{{m.retry}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>{{m.retryLabel}}</button>
+                  </div>
+                </sc-if>
+
+                <!-- câu trả lời -->
+                <sc-if value="{{m.showAnswer}}" hint-placeholder-val="{{true}}">
+                  <div class="answer {{m.answerCls}}"><sc-for list="{{m.parts}}" as="p" hint-placeholder-count="3"><sc-if value="{{p.isText}}" hint-placeholder-val="{{true}}"><span>{{p.s}}</span></sc-if><sc-if value="{{p.isCite}}" hint-placeholder-val="{{false}}"><button class="cite {{p.cls}}" aria-label="{{p.aria}}" onClick="{{p.open}}">{{p.n}}<span class="cite-tip" role="tooltip">{{p.tip}}</span></button></sc-if></sc-for><sc-if value="{{m.caret}}" hint-placeholder-val="{{false}}"><span class="caret" aria-hidden="true"></span></sc-if></div>
+                </sc-if>
+                <sc-if value="{{m.showMore}}" hint-placeholder-val="{{false}}"><button class="more-btn" onClick="{{m.toggleMore}}">{{m.moreLabel}}</button></sc-if>
+
+                <sc-if value="{{m.showTable}}" hint-placeholder-val="{{false}}">
+                  <div class="tbl-wrap"><table class="tbl">
+                    <thead><tr><th scope="col">Tiêu chí</th><sc-for list="{{m.table.cols}}" as="c" hint-placeholder-count="2"><th scope="col"><span class="th-club {{c.cls}}"><span class="dot"></span>{{c.label}}</span></th></sc-for></tr></thead>
+                    <tbody><sc-for list="{{m.table.rows}}" as="r" hint-placeholder-count="3"><tr><td class="rowkey">{{r.k}}</td><sc-for list="{{r.cells}}" as="cell" hint-placeholder-count="2"><td><sc-for list="{{cell.parts}}" as="p" hint-placeholder-count="2"><sc-if value="{{p.isText}}" hint-placeholder-val="{{true}}"><span>{{p.s}}</span></sc-if><sc-if value="{{p.isCite}}" hint-placeholder-val="{{false}}"><button class="cite {{p.cls}}" aria-label="{{p.aria}}" onClick="{{p.open}}">{{p.n}}<span class="cite-tip" role="tooltip">{{p.tip}}</span></button></sc-if></sc-for></td></sc-for></tr></sc-for></tbody>
+                  </table></div>
+                </sc-if>
+
+                <!-- abstain -->
+                <sc-if value="{{m.showAbstain}}" hint-placeholder-val="{{false}}">
+                  <div class="abstain" role="note">
+                    <div class="abstain__head"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8h.01M11 12h1v5h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>Tài liệu chưa có thông tin này</div>
+                    <p>Tài liệu hiện có không đề cập đến “{{m.topic}}”.</p>
+                    <div>
+                      <div class="abstain__label">Thông tin gần nhất có thể hữu ích</div>
+                      <div class="strip">
+                        <sc-for list="{{m.strip}}" as="c" hint-placeholder-count="2">
+                          <button class="src-mini {{c.cls}}" onClick="{{c.open}}"><span class="src-mini__head"><span class="num">{{c.n}}</span><span class="badge">{{c.club}}</span><span class="src-id">{{c.id}}</span></span><span class="src-mini__topic">{{c.topic}}</span><span class="src-mini__text">{{c.text}}</span></button>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div class="abstain__actions">
+                      <button class="btn btn--outline btn--sm" onClick="{{m.rephrase}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>Hỏi lại theo cách khác</button>
+                      <button class="btn btn--outline btn--sm" onClick="{{m.suggestAgain}}">Xem các câu gợi ý</button>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{m.showStopped}}" hint-placeholder-val="{{false}}"><span class="stopped-label">Đã dừng</span></sc-if>
+
+                <!-- dải nguồn -->
+                <sc-if value="{{m.showStrip}}" hint-placeholder-val="{{false}}">
+                  <div class="strip" aria-label="Nguồn">
+                    <sc-for list="{{m.strip}}" as="c" hint-placeholder-count="3">
+                      <button class="src-mini {{c.cls}}" onClick="{{c.open}}"><span class="src-mini__head"><span class="num">{{c.n}}</span><span class="badge">{{c.club}}</span><span class="src-id">{{c.id}}</span></span><span class="src-mini__topic">{{c.topic}}</span><span class="src-mini__text">{{c.text}}</span></button>
+                    </sc-for>
+                    <sc-if value="{{m.hasMoreSrc}}" hint-placeholder-val="{{false}}"><button class="src-more" onClick="{{m.openAll}}">{{m.moreSrcLabel}}</button></sc-if>
+                  </div>
+                </sc-if>
+
+                <!-- hàng hành động -->
+                <sc-if value="{{m.showActions}}" hint-placeholder-val="{{false}}">
+                  <div class="actions {{m.actionsCls}}" role="group" aria-label="Hành động với câu trả lời">
+                    <sc-if value="{{m.canCopy}}" hint-placeholder-val="{{true}}">
+                      <button class="act" onClick="{{m.copy}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10"/></svg>{{m.copyLabel}}</button>
+                      <button class="act {{m.upCls}}" aria-pressed="{{m.upOn}}" aria-label="Câu trả lời hữu ích" onClick="{{m.up}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9h3zM7 11l4-8c1.5 0 2.5 1 2.2 2.6L12.8 9H19a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 20H7"/></svg></button>
+                      <button class="act {{m.downCls}}" aria-pressed="{{m.downOn}}" aria-label="Câu trả lời chưa tốt" onClick="{{m.down}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 13V4h3v9h-3zM17 13l-4 8c-1.5 0-2.5-1-2.2-2.6L11.2 15H5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.2 4H17"/></svg></button>
+                      <sc-if value="{{m.fbSent}}" hint-placeholder-val="{{false}}"><span class="fakenote">Cảm ơn phản hồi của bạn.</span></sc-if>
+                      <span class="act-sep"></span>
+                      <button class="act" onClick="{{m.viewSources}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5zM4 19a2 2 0 0 1 2-2h13"/></svg>Xem nguồn</button>
+                    </sc-if>
+                    <button class="act" onClick="{{m.viewTech}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h2a2 2 0 0 1 2 2V14"/></svg>Xem cách hệ thống trả lời</button>
+                  </div>
+                </sc-if>
+
+                <!-- popover 👎 -->
+                <sc-if value="{{m.fbOpen}}" hint-placeholder-val="{{false}}">
+                  <div class="popover fb" role="dialog" aria-label="Lý do chưa hài lòng" style="top: 100%; left: 0">
+                    <div class="fb__title">Điều gì chưa ổn?</div>
+                    <div class="fb__reasons">
+                      <sc-for list="{{m.fbReasons}}" as="r" hint-placeholder-count="4"><button class="chip {{r.cls}}" aria-pressed="{{r.active}}" onClick="{{r.pick}}">{{r.label}}</button></sc-for>
+                    </div>
+                    <textarea class="fb__note" placeholder="Ghi chú thêm (không bắt buộc)" aria-label="Ghi chú" value="{{m.fbNote}}" onChange="{{m.onFbNote}}"></textarea>
+                    <div class="fb__row"><button class="btn btn--ghost btn--sm" onClick="{{m.closeFb}}">Hủy</button><button class="btn btn--primary btn--sm" onClick="{{m.sendFb}}">Gửi</button></div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{m.showTechLine}}" hint-placeholder-val="{{false}}"><span class="techline">{{m.techLine}}</span></sc-if>
+              </div>
+            </sc-if>
+
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ COMPOSER ============ -->
+    <div class="composer-wrap">
+      <div class="inner">
+        <div class="composer {{composerCls}}">
+          <label class="sr-only" for="s2b-ta">Câu hỏi</label>
+          <textarea id="s2b-ta" class="composer__ta" rows="1" ref="{{setTa}}" placeholder="Nhập câu hỏi… (có thể gõ không dấu)" value="{{input}}" onChange="{{onInput}}" onKeyDown="{{onTaKey}}" aria-invalid="{{overLimit}}"></textarea>
+          <div class="composer__row">
+            <span class="grow" style="flex:1"></span>
+            <sc-if value="{{showCount}}" hint-placeholder-val="{{false}}"><span class="composer__count mono {{countCls}}">{{countText}}</span></sc-if>
+            <sc-if value="{{running}}" hint-placeholder-val="{{false}}"><button class="btn btn--stop" onClick="{{stopRun}}"><svg class="ic ic--fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>Dừng</button></sc-if>
+            <sc-if value="{{notRunning}}" hint-placeholder-val="{{true}}"><button class="send" aria-label="Gửi câu hỏi" disabled="{{sendDisabled}}" onClick="{{sendClick}}"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></sc-if>
+          </div>
+        </div>
+        <sc-if value="{{overLimit}}" hint-placeholder-val="{{false}}"><p class="field-err" role="alert"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>Câu hỏi tối đa 500 ký tự. Hãy rút gọn trước khi gửi.</p></sc-if>
+        <p class="hint">Enter để gửi · Shift + Enter xuống dòng</p>
+      </div>
+    </div>
+
+    <!-- hộp thoại xóa -->
+    <sc-if value="{{deleteOpen}}" hint-placeholder-val="{{false}}">
+      <div class="dialog-wrap">
+        <div class="dialog" role="alertdialog" aria-labelledby="s2b-del-t">
+          <h2 id="s2b-del-t">Xóa cuộc trò chuyện này?</h2>
+          <p>“{{deleteTitle}}” sẽ bị xóa khỏi lịch sử. Lịch sử chỉ lưu trên trình duyệt này, và mỗi câu hỏi được trả lời độc lập.</p>
+          <div class="dialog__row"><button class="btn btn--outline" onClick="{{cancelDelete}}">Hủy</button><button class="btn btn--danger" onClick="{{confirmDelete}}">Xóa</button></div>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <!-- ============ PANEL PHẢI / BOTTOM SHEET ============ -->
+  <aside class="panel" aria-label="Chi tiết" aria-hidden="{{panelHidden}}">
+    <div class="panel__inner">
+      <button class="sheet-handle" aria-label="Kéo để mở rộng hoặc thu nhỏ" onPointerDown="{{handleDown}}" onPointerUp="{{handleUp}}" onClick="{{handleClick}}"><span class="grab"></span></button>
+      <div class="panel__head">
+        <sc-if value="{{showPanelTitle}}" hint-placeholder-val="{{true}}"><h2 class="panel__title">Nguồn ({{srcCount}})</h2></sc-if>
+        <sc-if value="{{tech}}" hint-placeholder-val="{{false}}">
+          <div class="seg" role="tablist" aria-label="Chế độ bảng">
+            <button role="tab" aria-selected="{{segSources}}" onClick="{{showSources}}">Nguồn ({{srcCount}})</button>
+            <button role="tab" aria-selected="{{segTech}}" onClick="{{showTechPanel}}">Kỹ thuật</button>
+          </div>
+        </sc-if>
+        <button class="btn btn--ghost btn--icon" aria-label="Đóng bảng (Esc)" onClick="{{closePanel}}"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <!-- Nguồn -->
+      <sc-if value="{{panelSources}}" hint-placeholder-val="{{false}}">
+        <div class="panel__body" ref="{{setPanelBody}}">
+          <sc-if value="{{noSources}}" hint-placeholder-val="{{false}}"><p class="empty-note">Chưa có nguồn nào được trích dẫn cho câu trả lời này.</p></sc-if>
+          <sc-for list="{{srcCards}}" as="c" hint-placeholder-count="3">
+            <button class="src-card {{c.cls}} {{c.selCls}}" data-src="{{c.n}}" aria-current="{{c.sel}}" onClick="{{c.select}}">
+              <span class="src-card__head"><span class="num">{{c.n}}</span><span class="badge">{{c.club}}</span><span class="src-card__topic">{{c.topic}}</span><span class="src-id">{{c.id}}</span></span>
+              <span class="src-card__text"><sc-for list="{{c.hl}}" as="h" hint-placeholder-count="3"><sc-if value="{{h.h}}" hint-placeholder-val="{{false}}"><mark class="hl">{{h.s}}</mark></sc-if><sc-if value="{{h.nh}}" hint-placeholder-val="{{true}}"><span>{{h.s}}</span></sc-if></sc-for></span>
+            </button>
+          </sc-for>
+          <p class="fakenote">Nội dung các đoạn nguồn là dữ liệu giả để minh họa (trừ ngày thành lập ProPTIT).</p>
+        </div>
+        <div class="panel__foot">
+          <button class="btn btn--outline btn--sm" onClick="{{prevSrc}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Trước</button>
+          <span class="mono">{{selText}}</span>
+          <button class="btn btn--outline btn--sm" onClick="{{nextSrc}}">Sau<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+        </div>
+      </sc-if>
+
+      <!-- Kỹ thuật -->
+      <sc-if value="{{panelTech}}" hint-placeholder-val="{{false}}">
+        <div class="tabs" role="tablist" aria-label="Chế độ kỹ thuật">
+          <sc-for list="{{techTabs}}" as="t" hint-placeholder-count="4"><button class="tab" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+        </div>
+        <div class="panel__body">
+          <sc-if value="{{noTech}}" hint-placeholder-val="{{false}}"><p class="empty-note">Chưa có phản hồi để phân tích. Hãy đặt một câu hỏi, rồi mở lại tab này.</p></sc-if>
+
+          <sc-if value="{{tabQuery}}" hint-placeholder-val="{{true}}">
+            <div class="tech-body">
+              <div><div class="lbl">Câu gốc</div><div class="qbox mono">{{tq.original}}</div></div>
+              <div><div class="lbl">Sau khi chuẩn hóa</div><div class="qbox">{{tq.rewritten}}</div></div>
+              <div>
+                <div class="lbl">Mở rộng viết tắt</div>
+                <sc-if value="{{tq.hasExp}}" hint-placeholder-val="{{true}}"><div class="chips"><sc-for list="{{tq.exps}}" as="x" hint-placeholder-count="2"><span class="exp"><span class="from">{{x.from}}</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="to">{{x.to}}</span></span></sc-for></div></sc-if>
+                <sc-if value="{{tq.noExp}}" hint-placeholder-val="{{false}}"><p class="fakenote">Không có từ viết tắt cần mở rộng.</p></sc-if>
+              </div>
+              <div>
+                <div class="lbl">CLB suy ra từ câu hỏi (trace.clubs)</div>
+                <sc-if value="{{tq.hasFilter}}" hint-placeholder-val="{{true}}"><span class="badge {{tq.filterCls}}">{{tq.filterLabel}}</span></sc-if>
+                <sc-if value="{{tq.noFilter}}" hint-placeholder-val="{{false}}"><p class="fakenote">Không suy ra được — tìm trên toàn bộ tài liệu.</p></sc-if>
+                <sc-if value="{{tq.hasUserFilter}}" hint-placeholder-val="{{false}}"><p class="fakenote" style="margin-top:8px">Bộ lọc do người dùng chọn: {{tq.userFilter}}</p></sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{tabRetrieve}}" hint-placeholder-val="{{false}}">
+            <div class="tech-body">
+              <div>
+                <div class="lbl">Dòng chảy truy xuất</div>
+                <div class="funnel">
+                  <sc-for list="{{funnel}}" as="f" hint-placeholder-count="3"><div class="funnel__row"><div class="funnel__bar {{f.cls}}" style="width: {{f.w}}">{{f.label}}</div><span class="funnel__num">{{f.n}}</span></div></sc-for>
+                </div>
+              </div>
+              <div>
+                <div class="lbl">Ứng viên (20) · cột điểm hiển thị HẠNG</div>
+                <div class="ctbl-wrap"><table class="ctbl">
+                  <thead><tr><sc-for list="{{heads}}" as="h" hint-placeholder-count="7"><th scope="col" aria-sort="{{h.aria}}"><button onClick="{{h.sort}}">{{h.label}}<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px"><path d="{{h.icon}}"/></svg></button></th></sc-for></tr></thead>
+                  <tbody>
+                    <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+                      <tr class="{{r.cls}}">
+                        <td class="mono">{{r.id}}</td>
+                        <td><span class="badge {{r.club}}">{{r.clubLabel}}</span></td>
+                        <td class="topic">{{r.topic}}</td>
+                        <td class="rk {{r.bm25Cls}}">{{r.bm25}}</td>
+                        <td class="rk {{r.denseCls}}">{{r.dense}}</td>
+                        <td class="rk {{r.rerankCls}}">{{r.rerank}}</td>
+                        <td><span class="{{r.pillCls}}">{{r.status}}</span></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{tabTime}}" hint-placeholder-val="{{false}}">
+            <div class="tech-body">
+              <div>
+                <div class="lbl">Thời gian theo bước</div>
+                <div class="wf">
+                  <sc-for list="{{waterfall}}" as="w" hint-placeholder-count="4"><div class="wf__row"><span>{{w.label}}</span><span class="wf__track"><span class="wf__bar" style="left: {{w.left}}; width: {{w.width}}"></span></span><span class="wf__ms">{{w.ms}}</span></div></sc-for>
+                  <div class="wf__total"><span>Tổng</span><span class="mono">{{totalMs}}</span></div>
+                </div>
+              </div>
+              <div class="metrics">
+                <div class="metric"><div class="metric__k">Số lời gọi LLM</div><div class="metric__v">{{tm.llm}}</div></div>
+                <div class="metric"><div class="metric__k">Token vào / ra (≈ ước tính)</div><div class="metric__v">{{tm.tokens}}</div></div>
+                <div class="metric"><div class="metric__k">Chi phí (USD, ≈)</div><div class="metric__v">{{tm.cost}}</div></div>
+                <div class="metric"><div class="metric__k">Lời gọi trúng cache</div><div class="metric__v">{{tm.cache}}</div></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{tabJson}}" hint-placeholder-val="{{false}}">
+            <div class="tech-body">
+              <div style="display:flex;justify-content:space-between;align-items:center"><div class="lbl" style="margin:0">Phản hồi thô (JSON)</div><button class="btn btn--outline btn--sm" onClick="{{copyJson}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10"/></svg>{{jsonCopyLabel}}</button></div>
+              <div class="code" tabindex="0" role="region" aria-label="JSON phản hồi"><sc-for list="{{jsonLines}}" as="ln" hint-placeholder-count="12"><div class="jl"><sc-for list="{{ln.toks}}" as="tk" hint-placeholder-count="4"><span class="{{tk.cls}}">{{tk.t}}</span></sc-for></div></sc-for></div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"light","options":["light","dark"],"section":"Giao diện"},"scene":{"editor":"enum","default":"","options":["","empty","answer","nodau","compare","abstain","running","streaming","err429","edge","feedback","delete","compose"],"section":"Trạng thái khởi tạo"},"panel":{"editor":"enum","default":"","options":["","sources","tech"],"section":"Trạng thái khởi tạo"},"tech":{"editor":"enum","default":"","options":["","on"],"section":"Trạng thái khởi tạo"},"tab":{"editor":"enum","default":"query","options":["query","retrieval","time","json"],"section":"Trạng thái khởi tạo"},"sheet":{"editor":"enum","default":"half","options":["half","full"],"section":"Trạng thái khởi tạo"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+
+  /* ---------- khởi tạo ---------- */
+  getS() { if (!this.state || !this.state.__i) { this.state = this.initState(); } return this.state; }
+
+  initState() {
+    var p = this.props || {};
+    var seed = [
+      { id: 'h1', title: 'CLB Lập Trình PTIT thành lập khi nào?', group: 'today', scene: 'founding' },
+      { id: 'h2', title: 'So sánh cách tuyển thành viên của ProPTIT và GCC', group: 'today', scene: 'compare' },
+      { id: 'h3', title: 'Muốn vào CLB Multimedia cần qua mấy vòng?', group: 'week', scene: 'rounds' },
+      { id: 'h4', title: 'GCC có những ban nào?', group: 'week', scene: 'gccban' },
+      { id: 'h5', title: 'S2B gồm những câu lạc bộ nào?', group: 'week', scene: 's2b' }
+    ];
+    var s = { __i: 1, theme: p.theme === 'dark' ? 'dark' : 'light', collapsed: false, drawer: false, tech: p.tech === 'on', panel: null, sheetFull: p.sheet === 'full', techTab: p.tab || 'query', sortKey: 'rerank', sortDir: 'asc', filter: 'all', filterMenu: false, input: '', activeId: 'blank', focusId: null, selSrc: 1, menuId: null, renameId: null, renameVal: '', deleteId: null, fbOpenId: null, fbReason: null, fbNote: '', fbSent: {}, votes: {}, copiedId: null, jsonCopied: false, offline: false, open: {}, more: {}, demo: false, convs: seed, msgs: {}, nid: 100 };
+    if (p.scene && p.scene !== 'empty') this.applyScene(s, p.scene);
+    if (p.scene === 'empty') s.filterMenu = false;
+    if (p.panel) s.panel = p.panel;
+    return s;
+  }
+
+  mkBot(id, sc, mode) {
+    var ms = sc.stageList.map(function (x) { return x.ms; });
+    var b = { id: id, role: 'bot', sc: sc, failMode: null, errKind: null, countdown: null, streamLen: 0 };
+    if (mode === 'done') return Object.assign(b, { status: 'done', stages: ['done', 'done', 'done', 'done'], stageMs: ms, streamLen: 1e9 });
+    if (mode === 'running') return Object.assign(b, { status: 'running', stages: ['done', 'running', 'pending', 'pending'], stageMs: [ms[0], null, null, null] });
+    if (mode === 'streaming') return Object.assign(b, { status: 'running', stages: ['done', 'done', 'done', 'running'], stageMs: [ms[0], ms[1], ms[2], null], streamLen: Math.floor(sc.textLen * 0.55) });
+    if (mode === '429') return Object.assign(b, { status: 'error', errKind: '429', countdown: 7, stages: ['done', 'error', 'pending', 'pending'], stageMs: [ms[0], null, null, null] });
+    if (mode === 'timeout') return Object.assign(b, { status: 'error', errKind: 'timeout', stages: ['done', 'done', 'error', 'pending'], stageMs: [ms[0], ms[1], null, null] });
+    return Object.assign(b, { status: 'stopped', stages: ['done', 'done', 'done', 'pending'], stageMs: [ms[0], ms[1], ms[2], null], streamLen: Math.floor(sc.textLen * 0.6) });
+  }
+
+  applyScene(s, sc) {
+    var D = window.S2B, self = this;
+    function pair(convId, key, query, mode) {
+      var scn = D.scenario(key, query, null), n = s.nid; s.nid += 2;
+      var u = { id: 'u' + n, role: 'user', text: scn.query };
+      var b = self.mkBot('b' + (n + 1), scn, mode);
+      s.msgs[convId] = (s.msgs[convId] || []).concat([u, b]);
+      return b;
+    }
+    function addConv(id, title) { s.convs = [{ id: id, title: title, group: 'today' }].concat(s.convs); }
+    var b;
+    if (sc === 'compare') { b = pair('h2', 'compare', null, 'done'); s.activeId = 'h2'; }
+    else if (sc === 'nodau') { addConv('x1', 'clb dpt tuyen thanh vien thang may'); b = pair('x1', 'nodau', null, 'done'); s.activeId = 'x1'; }
+    else if (sc === 'abstain') { addConv('x2', D.ABSTAIN_Q); b = pair('x2', 'abstain', D.ABSTAIN_Q, 'done'); s.activeId = 'x2'; }
+    else if (sc === 'edge') {
+      pair('h3', 'rounds', null, 'stopped'); pair('h3', 'founding', null, 'timeout'); b = pair('h3', 'long', null, 'done'); s.activeId = 'h3';
+      s.more = {};
+    }
+    else {
+      var mode = sc === 'running' ? 'running' : sc === 'streaming' ? 'streaming' : sc === 'err429' ? '429' : 'done';
+      b = pair('h1', 'founding', null, mode); s.activeId = 'h1';
+      if (sc === 'feedback') { s.fbOpenId = b.id; s.votes[b.id] = 'down'; s.fbReason = 'Thiếu ý'; }
+      if (sc === 'delete') s.deleteId = 'h1';
+      if (sc === 'compose') { s.offline = true; s.input = 'Cho mình hỏi chi tiết về quy trình tuyển thành viên của các câu lạc bộ trong S2B, bao gồm số vòng, hình thức từng vòng, thời điểm mở đơn, yêu cầu hồ sơ, cách theo dõi kết quả, lịch phỏng vấn, cách chuẩn bị cho bài kiểm tra kỹ năng, và những lưu ý dành cho tân sinh viên chưa có kinh nghiệm. '.repeat(2); }
+    }
+    s.focusId = b ? b.id : null;
+  }
+
+  componentWillUnmount() { this.clearTimers(); }
+
+  /* ---------- helpers ---------- */
+  refs() {
+    if (!this._refs) {
+      var self = this;
+      this._refs = {
+        root: function (el) { self._root = el; }, ta: function (el) { self._ta = el; },
+        scroll: function (el) { self._scroll = el; }, pbody: function (el) { self._pbody = el; }
+      };
+    }
+    return this._refs;
+  }
+  curMsgs(s) { return s.msgs[s.activeId] || []; }
+  findMsg(id) { var s = this.getS(), ks = Object.keys(s.msgs); for (var i = 0; i < ks.length; i++) { var l = s.msgs[ks[i]]; for (var j = 0; j < l.length; j++) { if (l[j].id === id) return l[j]; } } return null; }
+  patchMsg(id, fn) {
+    this.setState(function (s) {
+      var msgs = {}; Object.keys(s.msgs).forEach(function (k) { msgs[k] = s.msgs[k].map(function (m) { return m.id === id ? fn(m) : m; }); });
+      return { msgs: msgs };
+    });
+  }
+  focusMsg(s) {
+    var bots = this.curMsgs(s).filter(function (m) { return m.role === 'bot'; });
+    var f = bots.filter(function (m) { return m.id === s.focusId; })[0];
+    return f || bots[bots.length - 1] || null;
+  }
+  isRunning() { var s = this.getS(); return this.curMsgs(s).some(function (m) { return m.role === 'bot' && m.status === 'running'; }); }
+  scrollEnd() { var el = this._scroll; if (el) { setTimeout(function () { el.scrollTop = el.scrollHeight; }, 20); } }
+  focusTa() { var el = this._ta; if (el && el.focus) el.focus(); }
+  resetTa() { if (this._ta) this._ta.style.height = 'auto'; }
+  clearTimers() { var t = this.timers || {}; clearTimeout(t.run); clearInterval(t.stream); clearTimeout(t.fin); clearInterval(t.cd); clearTimeout(t.off); this.timers = {}; }
+
+  /* ---------- gửi & chạy ---------- */
+  send(text, sceneKey) {
+    var s = this.getS(), D = window.S2B;
+    var q = (text != null ? text : s.input).trim();
+    if (!q || q.length > 500 || this.isRunning()) return;
+    var key = sceneKey || D.route(q);
+    var failMode = key === 'err429' ? '429' : (key === 'timeout' ? 'timeout' : null);
+    var base = failMode ? 'founding' : key;
+    var sc = D.scenario(base, q, null);
+    var id = s.activeId, convs = s.convs;
+    if (id === 'blank') { id = 'n' + s.nid; convs = [{ id: id, title: q, group: 'today' }].concat(convs); }
+    var uid = 'u' + (s.nid + 1), bid = 'b' + (s.nid + 2);
+    var msgs = Object.assign({}, s.msgs);
+    msgs[id] = (msgs[id] || []).concat([
+      { id: uid, role: 'user', text: q },
+      { id: bid, role: 'bot', sc: sc, failMode: failMode, status: 'running', stages: ['running', 'pending', 'pending', 'pending'], stageMs: [null, null, null, null], streamLen: 0, errKind: null, countdown: null }
+    ]);
+    var self = this;
+    this.setState({ convs: convs, activeId: id, msgs: msgs, nid: s.nid + 3, input: '', focusId: bid, selSrc: 1, filterMenu: false, fbOpenId: null, drawer: false });
+    setTimeout(function () { self.resetTa(); self.scrollEnd(); self.runStep(bid, 0); }, 30);
+  }
+
+  runStep(id, i) {
+    var m = this.findMsg(id); if (!m || m.status !== 'running') return;
+    var self = this, sc = m.sc;
+    this.timers = this.timers || {};
+    if (i === 3) { this.stream(id); return; }
+    if (m.failMode === '429' && i === 1) { this.timers.run = setTimeout(function () { self.fail(id, 1, '429'); }, 500); return; }
+    if (m.failMode === 'timeout' && i === 2) { this.timers.run = setTimeout(function () { self.fail(id, 2, 'timeout'); }, 3200); return; }
+    var ms = sc.stageList[i].ms;
+    this.timers.run = setTimeout(function () {
+      self.patchMsg(id, function (mm) { var st = mm.stages.slice(), tm = mm.stageMs.slice(); st[i] = 'done'; tm[i] = ms; st[i + 1] = 'running'; return Object.assign({}, mm, { stages: st, stageMs: tm }); });
+      self.runStep(id, i + 1);
+    }, Math.max(380, ms * 1.4));
+  }
+
+  stream(id) {
+    var self = this, m = this.findMsg(id), sc = m.sc, total = sc.abstained ? 0 : sc.textLen, n = 0;
+    this.timers = this.timers || {};
+    if (!total) { this.timers.fin = setTimeout(function () { self.finish(id); }, Math.max(500, sc.stageList[3].ms * 1.1)); return; }
+    this.timers.stream = setInterval(function () {
+      n += 3;
+      if (n >= total) {
+        clearInterval(self.timers.stream);
+        self.patchMsg(id, function (mm) { return Object.assign({}, mm, { streamLen: total }); });
+        self.timers.fin = setTimeout(function () { self.finish(id); }, 260);
+      } else {
+        self.patchMsg(id, function (mm) { return mm.status === 'running' ? Object.assign({}, mm, { streamLen: n }) : mm; });
+      }
+      self.scrollEnd();
+    }, 26);
+  }
+
+  finish(id) {
+    var m = this.findMsg(id); if (!m || m.status !== 'running') return;
+    this.patchMsg(id, function (mm) { var st = mm.stages.slice(), tm = mm.stageMs.slice(); st[3] = 'done'; tm[3] = mm.sc.stageList[3].ms; return Object.assign({}, mm, { status: 'done', stages: st, stageMs: tm, streamLen: 1e9 }); });
+    this.scrollEnd();
+  }
+
+  fail(id, i, kind) {
+    var self = this;
+    this.patchMsg(id, function (mm) { var st = mm.stages.slice(); st[i] = 'error'; return Object.assign({}, mm, { status: 'error', stages: st, errKind: kind, countdown: kind === '429' ? 10 : null }); });
+    this.scrollEnd();
+    if (kind === '429') {
+      this.timers = this.timers || {}; clearInterval(this.timers.cd);
+      this.timers.cd = setInterval(function () {
+        var cur = self.findMsg(id);
+        if (!cur || cur.status !== 'error') { clearInterval(self.timers.cd); return; }
+        var c = (cur.countdown || 1) - 1;
+        if (c <= 0) { clearInterval(self.timers.cd); self.retry(id); }
+        else self.patchMsg(id, function (mm) { return Object.assign({}, mm, { countdown: c }); });
+      }, 1000);
+    }
+  }
+
+  retry(id) {
+    var self = this, old = this.findMsg(id); if (!old) return;
+    clearInterval((this.timers || {}).cd);
+    var bid = 'b' + (this.getS().nid + 1);
+    this.setState(function (s) {
+      var msgs = {}; Object.keys(s.msgs).forEach(function (k) {
+        msgs[k] = s.msgs[k].map(function (m) {
+          return m.id === id ? { id: bid, role: 'bot', sc: m.sc, failMode: null, status: 'running', stages: ['running', 'pending', 'pending', 'pending'], stageMs: [null, null, null, null], streamLen: 0, errKind: null, countdown: null } : m;
+        });
+      });
+      return { msgs: msgs, nid: s.nid + 2, focusId: bid };
+    });
+    setTimeout(function () { self.runStep(bid, 0); }, 30);
+  }
+
+  stopRun() {
+    this.clearTimers();
+    var s = this.getS();
+    this.curMsgs(s).filter(function (m) { return m.role === 'bot' && m.status === 'running'; }).forEach(function (b) { });
+    this.setState(function (st) {
+      var msgs = {}; Object.keys(st.msgs).forEach(function (k) {
+        msgs[k] = st.msgs[k].map(function (m) {
+          if (m.role === 'bot' && m.status === 'running') { return Object.assign({}, m, { status: 'stopped', stages: m.stages.map(function (z) { return z === 'running' ? 'pending' : z; }) }); }
+          return m;
+        });
+      });
+      return { msgs: msgs };
+    });
+  }
+
+  /* ---------- hành động UI ---------- */
+  newChat() { this.clearTimers(); this.stopRun(); this.setState({ activeId: 'blank', input: '', drawer: false, focusId: null, fbOpenId: null, offline: false }); var self = this; setTimeout(function () { self.resetTa(); self.focusTa(); }, 40); }
+  selectConv(id) {
+    this.clearTimers(); this.stopRun();
+    var s = this.getS(), D = window.S2B, msgs = s.msgs;
+    var c = s.convs.filter(function (x) { return x.id === id; })[0];
+    if (c && !msgs[id] && c.scene) {
+      var scn = D.scenario(c.scene, null, null), n = s.nid;
+      msgs = Object.assign({}, msgs);
+      msgs[id] = [{ id: 'u' + n, role: 'user', text: scn.query }, this.mkBot('b' + (n + 1), scn, 'done')];
+      this.setState({ msgs: msgs, nid: n + 2 });
+    }
+    var last = (msgs[id] || []).filter(function (m) { return m.role === 'bot'; }).pop();
+    this.setState({ activeId: id, drawer: false, focusId: last ? last.id : null, selSrc: 1, menuId: null, fbOpenId: null });
+  }
+  toggleCollapse() { this.setState({ collapsed: !this.getS().collapsed }); }
+  openSources(msgId, n) {
+    var self = this;
+    this.setState({ panel: 'sources', focusId: msgId, selSrc: n || 1, sheetFull: false, drawer: false });
+    setTimeout(function () { self.scrollToSrc(n || 1); }, 240);
+  }
+  scrollToSrc(n) {
+    var el = this._pbody && this._pbody.querySelector('[data-src="' + n + '"]');
+    if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); } }
+  }
+  stepSrc(d) {
+    var s = this.getS(), f = this.focusMsg(s); if (!f) return;
+    var len = f.sc.citations.length; if (!len) return;
+    var n = ((s.selSrc - 1 + d + len) % len) + 1; var self = this;
+    this.setState({ selSrc: n }); setTimeout(function () { self.scrollToSrc(n); }, 20);
+  }
+  toggleTech() {
+    var s = this.getS();
+    if (s.tech) this.setState({ tech: false, panel: s.panel === 'tech' ? null : s.panel });
+    else this.setState({ tech: true, panel: 'tech', sheetFull: false });
+  }
+  closeAll() {
+    var s = this.getS();
+    if (s.deleteId) this.setState({ deleteId: null });
+    else if (s.fbOpenId || s.filterMenu || s.menuId) this.setState({ fbOpenId: null, filterMenu: false, menuId: null });
+    else if (s.panel) this.setState({ panel: null });
+    else if (s.drawer) this.setState({ drawer: false });
+  }
+  copyText(id, text) {
+    var self = this;
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text); } catch (e) { }
+    this.setState({ copiedId: id });
+    setTimeout(function () { self.setState({ copiedId: null }); }, 1600);
+  }
+
+  onRootKey(e) {
+    var s = this.getS(), t = e.target, tag = ((t && t.tagName) || '').toLowerCase(), typing = tag === 'textarea' || tag === 'input';
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); this.newChat(); return; }
+    if (mod && e.key === '.') { e.preventDefault(); this.toggleTech(); return; }
+    if (e.key === 'Escape') { this.closeAll(); return; }
+    if (!typing && e.key === '/') { e.preventDefault(); this.focusTa(); return; }
+    if (!typing && s.panel === 'sources' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); this.stepSrc(e.key === 'ArrowDown' ? 1 : -1); }
+  }
+
+  /* ---------- view-model ---------- */
+  botVM(m, s) {
+    var D = window.S2B, self = this, sc = m.sc;
+    var done = m.status === 'done', running = m.status === 'running', err = m.status === 'error', stopped = m.status === 'stopped';
+    var abs = !!sc.abstained;
+    var steps = D.STEPS.map(function (st, i) {
+      var z = m.stages[i];
+      return { label: st.label, icon: D.ICON[st.icon], cls: 'step--' + z, isRun: z === 'running', isDone: z === 'done', isErr: z === 'error', isPend: z === 'pending', time: m.stageMs[i] != null ? D.ms(m.stageMs[i]) : (z === 'running' ? '…' : (z === 'error' ? 'lỗi' : '')) };
+    });
+    var open = !!s.open[m.id];
+    var n = sc.citations.length;
+    var clubOf = function (c) { return D.club(c.club); };
+    var citePart = function (num) {
+      if (!done) return { isText: true, isCite: false, s: '[' + num + ']' };
+      var c = sc.citations.filter(function (x) { return x.n === num; })[0]; if (!c) return { isText: true, isCite: false, s: '' };
+      return { isText: false, isCite: true, n: num, cls: clubOf(c).cls, aria: 'Nguồn ' + num + ': ' + c.club + ', đoạn ' + c.id, tip: c.plain, open: function () { self.openSources(m.id, num); } };
+    };
+    var parts = [], rem = m.streamLen, segs = sc.segments;
+    if (!abs) {
+      for (var i = 0; i < segs.length; i++) {
+        var g = segs[i];
+        if (g.t === 'text') { var take = Math.min(rem, g.s.length); if (take > 0) parts.push({ isText: true, isCite: false, s: g.s.slice(0, take) }); rem -= take; if (take < g.s.length) break; }
+        else parts.push(citePart(g.n));
+      }
+    }
+    var table = null, showTable = false;
+    if (sc.table && !err && (done || m.streamLen >= sc.textLen)) {
+      showTable = true;
+      table = {
+        cols: sc.table.cols.map(function (c) { return { label: c.label, cls: D.club(c.club).cls }; }),
+        rows: sc.table.rows.map(function (r) { return { k: r.k, cells: r.cells.map(function (c) { return { parts: [{ isText: true, isCite: false, s: c.t }, citePart(c.n)] }; }) }; })
+      };
+    }
+    var strip = sc.citations.slice(0, abs ? 2 : 3).map(function (c) {
+      return { n: c.n, id: '#' + c.id, club: c.club, cls: clubOf(c).cls, topic: c.topic, text: c.plain, open: function () { self.openSources(m.id, c.n); } };
+    });
+    var more = abs ? 0 : Math.max(0, n - 3);
+    var vote = s.votes[m.id];
+    var errText = m.errKind === 'timeout' ? 'Câu trả lời mất quá nhiều thời gian.' : 'Hệ thống đang quá tải, thử lại sau ít giây.';
+    var longAns = !!sc.long || sc.key === 'long';
+    var clamped = longAns && !s.more[m.id];
+    var copyDone = s.copiedId === m.id;
+    return {
+      id: m.id, isUser: false, isBot: true,
+      steps: steps, showSteps: running || err || stopped || (done && open), showSum: done,
+      open: open, sumText: '4 bước · ' + D.sec(sc.latency) + ' · ' + (abs ? 'chưa có nguồn khớp' : n + ' nguồn'),
+      toggleSteps: function () { var o = Object.assign({}, self.getS().open); o[m.id] = !o[m.id]; self.setState({ open: o }); },
+      showErr: err, errText: errText,
+      errSub: m.errKind === '429' ? 'Hệ thống tự thử lại sau ' + (m.countdown != null ? m.countdown : 10) + ' giây.' : 'Không nhận được phản hồi nào sau 90 giây. Bạn có thể thử lại.',
+      retryLabel: m.errKind === '429' ? 'Thử lại (' + (m.countdown != null ? m.countdown : 10) + ')' : 'Thử lại',
+      retry: function () { self.retry(m.id); },
+      showAnswer: !abs && !err && parts.length > 0, parts: parts, answerCls: clamped ? 'is-clamped' : '',
+      caret: running && m.stages[3] === 'running' && !abs,
+      showMore: longAns && done, moreLabel: clamped ? 'Xem thêm' : 'Thu gọn',
+      toggleMore: function () { var o = Object.assign({}, self.getS().more); o[m.id] = !o[m.id]; self.setState({ more: o }); },
+      showTable: showTable, table: table,
+      showAbstain: abs && done, topic: sc.query, strip: strip,
+      rephrase: function () { self.setState({ input: sc.query }); setTimeout(function () { self.focusTa(); }, 30); },
+      suggestAgain: function () { self.newChat(); },
+      showStopped: stopped,
+      showStrip: done && !abs, hasMoreSrc: more > 0, moreSrcLabel: '+' + more + ' nguồn', openAll: function () { self.openSources(m.id, 1); },
+      showActions: done, canCopy: !abs, actionsCls: (s.fbOpenId === m.id ? 'is-on' : ''),
+      copyLabel: copyDone ? 'Đã sao chép' : 'Sao chép', copy: function () { self.copyText(m.id, sc.plainAnswer); },
+      upOn: vote === 'up', upCls: vote === 'up' ? 'is-on' : '', downOn: vote === 'down', downCls: vote === 'down' ? 'is-on' : '',
+      up: function () { var v = Object.assign({}, self.getS().votes); v[m.id] = v[m.id] === 'up' ? null : 'up'; self.setState({ votes: v, fbOpenId: null }); },
+      down: function () { var v = Object.assign({}, self.getS().votes); v[m.id] = 'down'; self.setState({ votes: v, fbOpenId: m.id, fbReason: null, fbNote: '' }); },
+      fbSent: !!s.fbSent[m.id], fbOpen: s.fbOpenId === m.id,
+      fbReasons: ['Sai thông tin', 'Thiếu ý', 'Không đúng trọng tâm', 'Khác'].map(function (r) { var a = s.fbReason === r; return { label: r, active: a, cls: a ? 'is-active' : '', pick: function () { self.setState({ fbReason: r }); } }; }),
+      fbNote: s.fbNote, onFbNote: function (e) { self.setState({ fbNote: e.target.value }); }, closeFb: function () { self.setState({ fbOpenId: null }); },
+      sendFb: function () { var f = Object.assign({}, self.getS().fbSent); f[m.id] = true; self.setState({ fbSent: f, fbOpenId: null }); },
+      viewSources: function () { self.openSources(m.id, 1); },
+      viewTech: function () { self.setState({ tech: true, panel: 'tech', focusId: m.id, sheetFull: false }); },
+      showTechLine: s.tech && done, techLine: D.ms(sc.latency) + ' · ' + sc.llm + ' lời gọi LLM · ≈$' + sc.cost.toFixed(4)
+    };
+  }
+
+  renderVals() {
+    var s = this.getS(), D = window.S2B, self = this, R = this.refs();
+    var list = this.curMsgs(s);
+    var running = this.isRunning();
+    var msgs = list.map(function (m) { return m.role === 'user' ? { id: m.id, isUser: true, isBot: false, text: m.text } : self.botVM(m, s); });
+    var isEmpty = list.length === 0;
+    var focus = this.focusMsg(s);
+    var fsc = focus ? focus.sc : null;
+
+    /* sidebar */
+    var visible = s.convs.filter(function (c) { return c.id !== 'blank'; });
+    var groups = [{ label: 'Hôm nay', key: 'today' }, { label: '7 ngày qua', key: 'week' }].map(function (g) {
+      return {
+        label: g.label,
+        items: visible.filter(function (c) { return c.group === g.key; }).map(function (c) {
+          var cur = c.id === s.activeId, renaming = s.renameId === c.id;
+          return {
+            title: c.title, renameVal: s.renameVal, onRenameChange: function (e) { self.setState({ renameVal: e.target.value }); }, onRenameKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.commitRename(); } else if (e.key === 'Escape') { e.stopPropagation(); self.setState({ renameId: null }); } }, commitRename: function () { self.commitRename(); }, cls: cur ? 'is-current' : '', current: cur ? 'page' : 'false', renaming: renaming, notRenaming: !renaming, menuOpen: s.menuId === c.id,
+            select: function () { self.selectConv(c.id); },
+            toggleMenu: function (e) { if (e && e.stopPropagation) e.stopPropagation(); self.setState({ menuId: self.getS().menuId === c.id ? null : c.id }); },
+            rename: function () { self.setState({ renameId: c.id, renameVal: c.title, menuId: null }); },
+            ask: function () { self.setState({ deleteId: c.id, menuId: null }); }
+          };
+        })
+      };
+    }).filter(function (g) { return g.items.length > 0; });
+    var activeConv = s.convs.filter(function (c) { return c.id === s.activeId; })[0];
+
+    /* hero */
+    var chips = [{ label: 'Tất cả', val: 'all', cls: '' }, { label: 'ProPTIT', val: 'ProPTIT', cls: 'club--pro' }, { label: 'Multimedia', val: 'Multimedia', cls: 'club--mm' }, { label: 'GCC', val: 'GCC', cls: 'club--gcc' }].map(function (c) {
+      var a = s.filter === c.val;
+      return { label: c.label, cls: c.cls + (a ? ' is-active' : ''), active: a, hasDot: c.val !== 'all', pick: function () { self.setState({ filter: c.val }); } };
+    });
+    var sugg = D.SUGGEST.filter(function (x) { return s.filter === 'all' ? x.base : x.clubs.indexOf(s.filter) >= 0; }).slice(0, 6).map(function (x) {
+      var cls = x.club === 'cmp' ? 'club--cmp' : x.club === 'nodau' ? 'club--nodau' : D.club(x.club).cls;
+      return { id: x.id, badge: x.badge, q: x.q, cls: cls, ask: function () { self.send(x.q, x.scene); } };
+    });
+
+    /* composer */
+    var len = s.input.length, over = len > 500;
+    var fl = s.filter === 'all' ? 'Tất cả CLB' : s.filter;
+    var fcls = s.filter === 'all' ? '' : D.club(s.filter).cls;
+    var fopts = ['all', 'ProPTIT', 'Multimedia', 'GCC'].map(function (v) {
+      return { label: v === 'all' ? 'Tất cả CLB' : v, sel: s.filter === v, cls: (v === 'all' ? '' : D.club(v).cls) + (s.filter === v ? ' is-active' : ''), pick: function () { self.setState({ filter: v, filterMenu: false }); } };
+    });
+
+    /* panel */
+    var srcs = fsc ? fsc.citations : [];
+    var sel = Math.min(Math.max(s.selSrc, 1), Math.max(srcs.length, 1));
+    var srcCards = srcs.map(function (c) {
+      var hl = c.hl.map(function (h) { return { s: h.s, h: h.h, nh: !h.h }; });
+      return { n: c.n, id: '#' + c.id, club: c.club, topic: c.topic, hl: hl, cls: D.club(c.club).cls, sel: c.n === sel ? 'true' : 'false', selCls: c.n === sel ? 'is-selected' : '', select: function () { self.setState({ selSrc: c.n }); } };
+    });
+    var tabsDef = [['query', 'Truy vấn'], ['retrieval', 'Truy xuất'], ['time', 'Thời gian & chi phí'], ['json', 'Thô (JSON)']];
+    var techTabs = tabsDef.map(function (t) { return { label: t[1], sel: s.techTab === t[0], pick: function () { self.setState({ techTab: t[0] }); } }; });
+
+    var tq = { original: '', rewritten: '', hasExp: false, exps: [], noExp: true, hasFilter: false, noFilter: true, filterCls: '', filterLabel: '', hasUserFilter: false, userFilter: '' };
+    var funnel = [], heads = [], rows = [], waterfall = [], tm = { llm: '', tokens: '', cost: '', cache: '' }, totalMs = '', jlines = [];
+    if (fsc) {
+      tq = {
+        original: fsc.original, rewritten: fsc.rewritten, exps: fsc.expansions, hasExp: fsc.expansions.length > 0, noExp: fsc.expansions.length === 0,
+        hasFilter: !!fsc.inferredFilter && !fsc.abstained, noFilter: !fsc.inferredFilter || fsc.abstained, filterCls: fsc.inferredFilter ? D.club(fsc.inferredFilter).cls : '', filterLabel: fsc.inferredFilter || '',
+        hasUserFilter: !!fsc.userFilter, userFilter: fsc.userFilter || ''
+      };
+      var cands = fsc.candidates, nctx = cands.filter(function (c) { return c.selected; }).length, nsel = fsc.abstained ? 0 : fsc.citations.length;
+      funnel = [
+        { label: '20 ứng viên', n: '20', w: '100%', cls: '' },
+        { label: nctx + ' được chọn', n: String(nctx), w: Math.round(nctx / 20 * 100) + '%', cls: 'funnel__bar--2' },
+        { label: nsel + ' được trích dẫn', n: String(nsel), w: Math.max(Math.round(nsel / 20 * 100), 20) + '%', cls: 'funnel__bar--3' }
+      ];
+      var rank = function (c) { return c.cited ? 2 : (c.selected ? 1 : 0); };
+      var nv = function (v) { return v == null ? 99 : v; };
+      var key = s.sortKey, dir = s.sortDir === 'asc' ? 1 : -1;
+      var sorted = cands.slice().sort(function (a, b) {
+        var av, bv;
+        if (key === 'id') { av = a.id; bv = b.id; } else if (key === 'club') { av = a.club; bv = b.club; } else if (key === 'topic') { av = a.topic; bv = b.topic; }
+        else if (key === 'status') { av = -rank(a); bv = -rank(b); } else { av = nv(a[key]); bv = nv(b[key]); }
+        if (typeof av === 'string') return dir * av.localeCompare(bv, 'vi');
+        return dir * (av - bv);
+      });
+      var rk = function (v) { return v == null ? '—' : '#' + v; };
+      var top = function (v) { return v != null && v <= 5 ? 'is-top' : ''; };
+      rows = sorted.map(function (c) {
+        return {
+          id: '#' + c.id, club: D.club(c.club).cls, clubLabel: c.club, topic: c.topic,
+          bm25: rk(c.bm25), bm25Cls: top(c.bm25), dense: rk(c.dense), denseCls: top(c.dense), rerank: rk(c.rerank), rerankCls: top(c.rerank),
+          status: c.cited ? 'Trích dẫn' : (c.selected ? 'Đã chọn' : 'Loại'), pillCls: c.cited ? 'pill-sel' : (c.selected ? 'pill-ctx' : 'pill-mid'),
+          cls: c.cited ? 'is-selected' : (c.selected ? '' : 'is-dim')
+        };
+      });
+      var hd = [['id', '#id'], ['club', 'CLB'], ['topic', 'Chủ đề'], ['bm25', 'Hạng BM25'], ['dense', 'Hạng Dense'], ['rerank', 'Hạng Rerank'], ['status', 'Trạng thái']];
+      heads = hd.map(function (h) {
+        var act = s.sortKey === h[0];
+        return { label: h[1], aria: act ? (s.sortDir === 'asc' ? 'ascending' : 'descending') : 'none', icon: act ? (s.sortDir === 'asc' ? D.ICON.sortUp : D.ICON.sortDown) : '', sort: function () { var st = self.getS(); self.setState({ sortKey: h[0], sortDir: st.sortKey === h[0] ? (st.sortDir === 'asc' ? 'desc' : 'asc') : 'asc' }); } };
+      });
+      var tot = fsc.sumMs;
+      var labels = { rewrite: 'Hiểu câu hỏi', retrieve: 'Tìm tài liệu', rerank: 'Xếp hạng', generate: 'Soạn câu trả lời' };
+      waterfall = fsc.stageList.map(function (w) { return { label: labels[w.name], left: (w.start / tot * 100).toFixed(2) + '%', width: (w.ms / tot * 100).toFixed(2) + '%', ms: D.ms(w.ms) }; });
+      totalMs = D.ms(fsc.latency);
+      tm = { llm: String(fsc.llm), tokens: '≈ ' + D.grp(fsc.tokens['in']) + ' / ' + fsc.tokens.out, cost: '≈ $' + fsc.cost.toFixed(4), cache: (fsc.cache ? fsc.llm : 0) + ' / ' + fsc.llm };
+      if (s.panel === 'tech' && s.techTab === 'json') jlines = D.jsonLines(fsc);
+    }
+
+    var panelOpen = !!s.panel;
+    var pf = !!focus;
+    var feedbackReasons = ['Sai thông tin', 'Thiếu ý', 'Không đúng trọng tâm', 'Khác'].map(function (r) { var a = s.fbReason === r; return { label: r, active: a, cls: a ? 'is-active' : '', pick: function () { self.setState({ fbReason: r }); } }; });
+    var delConv = s.convs.filter(function (c) { return c.id === s.deleteId; })[0];
+
+    return {
+      theme: s.theme, isDark: s.theme === 'dark',
+      collapsedAttr: s.collapsed ? 'true' : 'false', drawerAttr: s.drawer ? 'open' : 'closed', panelAttr: panelOpen ? 'open' : 'closed', sheetAttr: s.sheetFull ? 'full' : 'half',
+      setRoot: R.root, setTa: R.ta, setScroll: R.scroll, setPanelBody: R.pbody,
+      onRootKey: function (e) { self.onRootKey(e); },
+      toggleCollapse: function () { self.toggleCollapse(); },
+      newChat: function () { self.newChat(); },
+      noHistory: visible.length === 0, groups: groups, convTitle: activeConv ? activeConv.title : 'Cuộc trò chuyện mới',
+      renameVal: s.renameVal,
+      onRenameChange: function (e) { self.setState({ renameVal: e.target.value }); },
+      onRenameKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.commitRename(); } else if (e.key === 'Escape') { e.stopPropagation(); self.setState({ renameId: null }); } },
+      commitRename: function () { self.commitRename(); },
+      demoOpen: s.demo, toggleDemo: function () { self.setState({ demo: !self.getS().demo }); },
+      demoAbstain: function () { self.send(D.ABSTAIN_Q, 'abstain'); },
+      demo429: function () { self.send('CLB Lập Trình PTIT thành lập khi nào?', 'err429'); },
+      demoTimeout: function () { self.send('CLB Lập Trình PTIT thành lập khi nào?', 'timeout'); },
+      demoLong: function () { self.send('Giới thiệu chi tiết về các hoạt động của S2B', 'long'); },
+      demoOffline: function () { self.setState({ offline: true, drawer: false }); clearTimeout((self.timers || {}).off); self.timers = self.timers || {}; self.timers.off = setTimeout(function () { self.setState({ offline: false }); }, 6000); },
+      toggleTheme: function () { self.setState({ theme: self.getS().theme === 'dark' ? 'light' : 'dark' }); },
+      tech: s.tech, toggleTech: function () { self.toggleTech(); },
+      offline: s.offline, openDrawer: function () { self.setState({ drawer: true }); },
+      closeOverlays: function () { self.setState({ drawer: false, panel: null }); },
+      isEmpty: isEmpty, filterChips: chips, suggestions: sugg, msgs: msgs,
+      fbReasons: feedbackReasons, fbNote: s.fbNote, onFbNote: function (e) { self.setState({ fbNote: e.target.value }); }, closeFb: function () { self.setState({ fbOpenId: null }); },
+
+      composerCls: over ? 'is-error' : (running ? 'is-sending' : ''), input: s.input, overLimit: over,
+      onInput: function (e) { var el = e.target; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 144) + 'px'; self.setState({ input: el.value }); },
+      onTaKey: function (e) { if (e.key === 'Enter' && !e.shiftKey && !(e.nativeEvent && e.nativeEvent.isComposing)) { e.preventDefault(); self.send(); } },
+      filterLabel: fl, filterClubCls: fcls, filterGroupCls: s.filter === 'all' ? '' : 'is-active ' + fcls, hasFilter: s.filter !== 'all', filterMenu: s.filterMenu, filterOptions: fopts,
+      toggleFilterMenu: function () { self.setState({ filterMenu: !self.getS().filterMenu }); },
+      clearFilter: function () { self.setState({ filter: 'all' }); },
+      showCount: len > 400, countText: len + ' / 500', countCls: over ? 'is-over' : '',
+      running: running, notRunning: !running, stopRun: function () { self.stopRun(); },
+      sendDisabled: !s.input.trim() || over, sendClick: function () { self.send(); },
+
+      deleteOpen: !!delConv, deleteTitle: delConv ? delConv.title : '',
+      cancelDelete: function () { self.setState({ deleteId: null }); },
+      confirmDelete: function () { self.confirmDelete(); },
+
+      panelHidden: panelOpen ? 'false' : 'true',
+      showPanelTitle: !s.tech, srcCount: srcs.length,
+      segSources: s.panel === 'sources', segTech: s.panel === 'tech',
+      showSources: function () { self.setState({ panel: 'sources' }); }, showTechPanel: function () { self.setState({ panel: 'tech' }); },
+      closePanel: function () { self.setState({ panel: null }); },
+      handleDown: function (e) { self._dy = e.clientY; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { } },
+      handleUp: function (e) {
+        var dy = e.clientY - (self._dy == null ? e.clientY : self._dy); self._dy = null; var st = self.getS();
+        if (dy < -30) self.setState({ sheetFull: true });
+        else if (dy > 30) { if (st.sheetFull) self.setState({ sheetFull: false }); else self.setState({ panel: null }); }
+        else if (Math.abs(dy) <= 4 && e.pointerType !== 'mouse') self.setState({ sheetFull: !st.sheetFull });
+        self._skipClick = true;
+      },
+      handleClick: function () { if (self._skipClick) { self._skipClick = false; return; } self.setState({ sheetFull: !self.getS().sheetFull }); },
+      panelSources: s.panel === 'sources', panelTech: s.panel === 'tech',
+      noSources: srcs.length === 0, srcCards: srcCards,
+      prevSrc: function () { self.stepSrc(-1); }, nextSrc: function () { self.stepSrc(1); }, selText: srcs.length ? 'Nguồn ' + sel + ' / ' + srcs.length : '—',
+      techTabs: techTabs, noTech: !pf,
+      tabQuery: pf && s.techTab === 'query', tabRetrieve: pf && s.techTab === 'retrieval', tabTime: pf && s.techTab === 'time', tabJson: pf && s.techTab === 'json',
+      tq: tq, funnel: funnel, heads: heads, rows: rows, waterfall: waterfall, totalMs: totalMs, tm: tm, jsonLines: jlines,
+      jsonCopyLabel: s.jsonCopied ? 'Đã sao chép' : 'Sao chép',
+      copyJson: function () { if (!fsc) return; try { if (navigator.clipboard) navigator.clipboard.writeText(D.jsonText(fsc)); } catch (e) { } self.setState({ jsonCopied: true }); setTimeout(function () { self.setState({ jsonCopied: false }); }, 1600); }
+    };
+  }
+
+  commitRename() {
+    var s = this.getS(); if (!s.renameId) return;
+    var v = (s.renameVal || '').trim(), id = s.renameId;
+    this.setState({ convs: s.convs.map(function (c) { return c.id === id && v ? Object.assign({}, c, { title: v }) : c; }), renameId: null });
+  }
+  confirmDelete() {
+    var s = this.getS(), id = s.deleteId; if (!id) return;
+    var msgs = Object.assign({}, s.msgs); delete msgs[id];
+    var patch = { convs: s.convs.filter(function (c) { return c.id !== id; }), msgs: msgs, deleteId: null };
+    if (s.activeId === id) { patch.activeId = 'blank'; patch.focusId = null; }
+    this.setState(patch);
+  }
+}
+</script>
+</body>
+</html>
