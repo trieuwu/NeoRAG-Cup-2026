@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>S2B Hỏi Đáp — Design system</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="s2b.css">
+<script src="s2b-data.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ds{min-height:100vh}
+.ds-wrap{max-width:1280px;margin:0 auto;padding:48px 32px 80px;display:flex;flex-direction:column;gap:56px}
+.ds h1{font-size:40px;line-height:1.15;font-weight:700;letter-spacing:-.02em}
+.ds h2.sec{font-size:24px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
+.ds .sub{color:var(--text-2);max-width:720px}
+.ds-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:24px}
+.ds-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:24px}
+.ds-table{width:100%;border-collapse:collapse;font-size:13px}
+.ds-table th{text-align:left;font-size:12px;color:var(--text-3);font-weight:600;padding:8px 12px;border-bottom:1px solid var(--border)}
+.ds-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.ds-sw{display:inline-block;width:40px;height:24px;border-radius:6px;border:1px solid var(--border-strong);vertical-align:middle}
+.ds-hex{font-family:var(--font-mono);font-size:12px;color:var(--text-2);margin-left:8px;vertical-align:middle}
+.ds-name{font-family:var(--font-mono);font-size:12.5px;font-weight:500}
+.ds-sp{height:16px;background:var(--accent);border-radius:3px}
+.ds-panel{border:1px solid var(--border);border-radius:var(--r-card);padding:24px;display:flex;flex-direction:column;gap:28px}
+.ds-label{font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.ds-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ds-note{font-size:12.5px;color:var(--text-3)}
+.ds-code{font-family:var(--font-mono);font-size:12.5px;line-height:1.65;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-card);padding:16px;overflow:auto;white-space:pre;color:var(--text)}
+.ds-tag{display:inline-block;font-family:var(--font-mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:1px 6px}
+</style>
+</helmet>
+<div class="s2b ds" data-theme="light">
+<div class="ds-wrap">
+
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <span class="badge club--cmp" style="align-self:flex-start">Design system · v1</span>
+    <h1>S2B Hỏi Đáp</h1>
+    <p class="sub">Token và component cho chatbot RAG về cộng đồng S2B. Sáng, gọn, tự tin: một màu nhấn xanh dương đậm, bốn màu nhận diện nhóm nguồn, số liệu kỹ thuật dùng font mono. Không dùng logo hay nhận diện thật của PTIT hoặc các CLB — CLB được phân biệt bằng màu và chữ viết tắt trong badge. Mọi nội dung mẫu là dữ liệu giả.</p>
+  </header>
+
+  <!-- ============ MÀU ============ -->
+  <section>
+    <h2 class="sec">1. Màu sắc</h2>
+    <p class="sub" style="margin-bottom:20px">Mỗi token có giá trị sáng và tối. Tên CSS variable viết dưới dạng <span class="ds-tag">--token</span>, khóa Tailwind tương ứng ở cột phải.</p>
+    <div class="ds-card" style="overflow-x:auto">
+      <table class="ds-table">
+        <thead><tr><th>Token</th><th>Sáng</th><th>Tối</th><th>Tailwind</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <sc-for list="{{tokens}}" as="r" hint-placeholder-count="8">
+            <tr>
+              <td class="ds-name">{{r.name}}</td>
+              <td><span class="ds-sw" style="background: {{r.light}}"></span><span class="ds-hex">{{r.light}}</span></td>
+              <td><span class="ds-sw" style="background: {{r.dark}}"></span><span class="ds-hex">{{r.dark}}</span></td>
+              <td class="ds-name" style="color:var(--text-2)">{{r.tw}}</td>
+              <td style="color:var(--text-2)">{{r.use}}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="ds-grid2" style="margin-top:24px">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+        <div class="s2b ds-panel" data-theme="{{t.key}}" style="background:var(--bg)">
+          <div class="ds-label" style="margin:0">Bốn nhóm nguồn — {{t.label}}</div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            <div class="club--pro ds-card" style="display:flex;flex-direction:column;gap:12px"><div class="ds-row"><span class="badge">ProPTIT</span><span class="cite" style="vertical-align:baseline">1</span><span class="dot"></span></div><span class="ds-note">Xanh dương · pro-bg / pro-fg / pro-solid</span></div>
+            <div class="club--mm ds-card" style="display:flex;flex-direction:column;gap:12px"><div class="ds-row"><span class="badge">Multimedia</span><span class="cite" style="vertical-align:baseline">2</span><span class="dot"></span></div><span class="ds-note">Tím · mm-bg / mm-fg / mm-solid</span></div>
+            <div class="club--gcc ds-card" style="display:flex;flex-direction:column;gap:12px"><div class="ds-row"><span class="badge">GCC</span><span class="cite" style="vertical-align:baseline">3</span><span class="dot"></span></div><span class="ds-note">Cam · gcc-bg / gcc-fg / gcc-solid</span></div>
+            <div class="club--s2b ds-card" style="display:flex;flex-direction:column;gap:12px"><div class="ds-row"><span class="badge">S2B</span><span class="cite" style="vertical-align:baseline">4</span><span class="dot"></span></div><span class="ds-note">Xám xanh · s2b-bg / s2b-fg / s2b-solid</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div class="ds-card" style="margin-top:24px">
+      <div class="ds-label">Tương phản WCAG AA (đã đo)</div>
+      <div style="overflow-x:auto"><table class="ds-table">
+        <thead><tr><th>Cặp màu</th><th>Sáng</th><th>Tối</th><th>Yêu cầu</th></tr></thead>
+        <tbody>
+          <sc-for list="{{contrast}}" as="c" hint-placeholder-count="6"><tr><td>{{c.pair}}</td><td class="mono">{{c.light}} : 1</td><td class="mono">{{c.dark}} : 1</td><td style="color:var(--text-2)">≥ 4,5 : 1</td></tr></sc-for>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ============ CHỮ ============ -->
+  <section>
+    <h2 class="sec">2. Typography</h2>
+    <p class="sub" style="margin-bottom:20px">Giao diện dùng Be Vietnam Pro vì dấu tiếng Việt hiển thị chuẩn. Số liệu kỹ thuật (id, điểm, ms, token, JSON) dùng JetBrains Mono với số dạng tabular.</p>
+    <div class="ds-card">
+      <table class="ds-table">
+        <thead><tr><th>Vai trò</th><th>Mẫu</th><th>Font</th><th>Cỡ / dòng / đậm</th><th>Tailwind</th></tr></thead>
+        <tbody>
+          <tr><td>Tiêu đề màn trống</td><td><span style="font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.15">Hỏi gì về S2B cũng được.</span></td><td>Be Vietnam Pro</td><td class="mono">40 / 46 / 700</td><td class="ds-name">text-display</td></tr>
+          <tr><td>Nội dung trả lời</td><td><span style="font-size:15.5px;line-height:1.75">CLB Lập Trình PTIT được thành lập ngày 09/10/2011.</span></td><td>Be Vietnam Pro</td><td class="mono">15,5 / 27 / 400</td><td class="ds-name">text-answer</td></tr>
+          <tr><td>UI cơ bản</td><td><span style="font-size:14px">Cuộc trò chuyện mới</span></td><td>Be Vietnam Pro</td><td class="mono">14 / 21 / 500</td><td class="ds-name">text-ui</td></tr>
+          <tr><td>Nhãn nhỏ</td><td><span style="font-size:12px;font-weight:600;color:var(--text-3)">THÔNG TIN GẦN NHẤT</span></td><td>Be Vietnam Pro</td><td class="mono">12 / 16 / 600</td><td class="ds-name">text-caption</td></tr>
+          <tr><td>Badge CLB</td><td><span class="badge club--mm">Multimedia</span></td><td>Be Vietnam Pro</td><td class="mono">11 / 20 / 600</td><td class="ds-name">text-badge</td></tr>
+          <tr><td>Số liệu kỹ thuật</td><td><span class="mono" style="font-size:13px">#12 · BM25 7.1 · Dense 0.83 · 1 840 ms</span></td><td>JetBrains Mono</td><td class="mono">12–13 / 20 / 400–600</td><td class="ds-name">font-mono text-data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ KHOẢNG CÁCH ============ -->
+  <section>
+    <h2 class="sec">3. Khoảng cách, bo góc, chuyển động</h2>
+    <div class="ds-grid2" style="margin-top:16px">
+      <div class="ds-card">
+        <div class="ds-label">Lưới 4px</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{spacing}}" as="sp" hint-placeholder-count="9"><div style="display:grid;grid-template-columns:72px 48px minmax(0,1fr);gap:12px;align-items:center"><span class="ds-name">{{sp.name}}</span><span class="mono" style="font-size:12px;color:var(--text-2)">{{sp.px}}px</span><span class="ds-sp" style="width: {{sp.px}}px"></span></div></sc-for>
+        </div>
+      </div>
+      <div class="ds-card" style="display:flex;flex-direction:column;gap:24px">
+        <div>
+          <div class="ds-label">Bo góc</div>
+          <div class="ds-row" style="gap:16px">
+            <div style="width:88px;height:64px;border:1.5px solid var(--accent);border-radius:12px;display:grid;place-items:center;font-size:12px">r-card 12</div>
+            <div style="width:88px;height:64px;border:1.5px solid var(--accent);border-radius:8px;display:grid;place-items:center;font-size:12px">r-ctl 8</div>
+            <div style="width:88px;height:40px;border:1.5px solid var(--accent);border-radius:999px;display:grid;place-items:center;font-size:12px">r-pill</div>
+          </div>
+        </div>
+        <div>
+          <div class="ds-label">Chuyển động</div>
+          <p style="font-size:13.5px;color:var(--text-2)">Tiết chế: <span class="ds-tag">--dur 160ms</span> <span class="ds-tag">--ease cubic-bezier(.16,.84,.44,1)</span> (ease-out). Dùng cho panel trượt, bottom sheet, tooltip, thu gọn thanh tiến trình. Spinner 0,8s và con trỏ nhấp nháy 1s. Khi người dùng bật <span class="ds-tag">prefers-reduced-motion</span>, mọi animation và transition rút về gần 0.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPONENT ============ -->
+  <section>
+    <h2 class="sec">4. Component</h2>
+    <p class="sub" style="margin-bottom:20px">Mỗi khối dưới đây hiển thị song song ở giao diện sáng và tối. Tên class theo mẫu <span class="ds-tag">.component__part--variant</span>, ánh xạ 1-1 sang component React ở mục 5.</p>
+    <div class="ds-grid2">
+      <sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+        <div class="s2b ds-panel" data-theme="{{t.key}}" style="background:var(--bg)">
+          <div style="font-size:15px;font-weight:700">Giao diện {{t.label}}</div>
+
+          <div>
+            <div class="ds-label">Button · Switch</div>
+            <div class="ds-row">
+              <button class="btn btn--primary">Chính</button><button class="btn btn--outline">Viền</button><button class="btn btn--ghost">Mờ</button><button class="btn btn--danger">Xóa</button><button class="btn btn--primary" disabled="{{true}}">Vô hiệu</button>
+            </div>
+            <div style="max-width:260px;margin-top:8px"><button class="switch" role="switch" aria-checked="true"><span class="switch__l">Chế độ kỹ thuật</span><span class="switch__track"></span></button></div>
+          </div>
+
+          <div>
+            <div class="ds-label">Chip lọc CLB (ChipFilter) · chỉ lọc câu hỏi gợi ý, không gửi kèm khi hỏi</div>
+            <div class="ds-row"><button class="chip is-active" aria-pressed="true">Tất cả</button><button class="chip club--pro" aria-pressed="false"><span class="dot"></span>ProPTIT</button><button class="chip club--mm" aria-pressed="false"><span class="dot"></span>Multimedia</button><button class="chip club--gcc" aria-pressed="false"><span class="dot"></span>GCC</button></div>
+            <div class="ds-row" style="margin-top:8px"><span class="exp"><span class="from">dpt</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="to">đa phương tiện</span></span><span class="exp"><span class="from">clb</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="to">câu lạc bộ</span></span></div>
+          </div>
+
+          <div>
+            <div class="ds-label">Badge CLB (ClubBadge)</div>
+            <div class="ds-row"><span class="badge club--pro">ProPTIT</span><span class="badge club--mm">Multimedia</span><span class="badge club--gcc">GCC</span><span class="badge club--s2b">S2B</span><span class="badge club--cmp">So sánh</span><span class="badge club--nodau">Không dấu</span></div>
+          </div>
+
+          <div>
+            <div class="ds-label">Số trích dẫn (CiteMark) · hover hiện tooltip</div>
+            <p class="answer">CLB Lập Trình PTIT được thành lập ngày 09/10/2011.<button class="cite club--pro" aria-label="Nguồn 1: ProPTIT, đoạn 12">1<span class="cite-tip" role="tooltip">CLB Lập Trình PTIT (ProPTIT) được thành lập ngày 09/10/2011 tại Học viện Công nghệ Bưu chính Viễn thông.</span></button> Hoạt động theo ban chuyên môn.<button class="cite club--mm" aria-label="Nguồn 2: Multimedia, đoạn 52">2</button><button class="cite club--gcc" aria-label="Nguồn 3: GCC, đoạn 88">3</button><button class="cite club--s2b" aria-label="Nguồn 4: S2B, đoạn 1">4</button></p>
+          </div>
+
+          <div>
+            <div class="ds-label">Thẻ nguồn (SourceCard) · dải và đầy đủ</div>
+            <div class="strip">
+              <button class="src-mini club--pro"><span class="src-mini__head"><span class="num">1</span><span class="badge">ProPTIT</span><span class="src-id">#12</span></span><span class="src-mini__topic">Lịch sử</span><span class="src-mini__text">CLB Lập Trình PTIT được thành lập ngày 09/10/2011 tại Học viện, với mục tiêu tạo sân chơi học thuật.</span></button>
+              <button class="src-mini club--gcc"><span class="src-mini__head"><span class="num">2</span><span class="badge">GCC</span><span class="src-id">#88</span></span><span class="src-mini__topic">Tuyển thành viên</span><span class="src-mini__text">[Dữ liệu giả] GCC tuyển thành viên vào đầu học kỳ I và II, ưu tiên bạn yêu thích làm game.</span></button>
+              <button class="src-more">+2 nguồn</button>
+            </div>
+            <button class="src-card club--pro is-selected" style="width:100%;text-align:left;margin-top:8px"><span class="src-card__head"><span class="num">1</span><span class="badge">ProPTIT</span><span class="src-card__topic">Lịch sử</span><span class="src-id">#12</span></span><span class="src-card__text">CLB Lập Trình PTIT (ProPTIT) được thành lập ngày <mark class="hl">09/10/2011</mark> tại Học viện Công nghệ Bưu chính Viễn thông. Từ một nhóm nhỏ yêu thích lập trình, CLB phát triển thành môi trường học tập.</span></button>
+          </div>
+
+          <div>
+            <div class="ds-label">Thanh tiến trình 4 bước (StepProgress)</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div class="steps">
+                <div class="step step--done"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="step__label">Hiểu câu hỏi</span></div><span class="step__time">620 ms</span></div>
+                <div class="step step--done"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="step__label">Tìm tài liệu</span></div><span class="step__time">41 ms</span></div>
+                <div class="step step--running"><div class="step__top"><span class="step__ico"><span class="spinner"></span></span><span class="step__label">Xếp hạng</span></div><span class="step__time">…</span></div>
+                <div class="step step--pending"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg></span><span class="step__label">Soạn câu trả lời</span></div><span class="step__time"></span></div>
+              </div>
+              <div class="steps">
+                <div class="step step--done"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="step__label">Hiểu câu hỏi</span></div><span class="step__time">620 ms</span></div>
+                <div class="step step--error"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span class="step__label">Tìm tài liệu</span></div><span class="step__time">lỗi</span></div>
+                <div class="step step--pending"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span><span class="step__label">Xếp hạng</span></div><span class="step__time"></span></div>
+                <div class="step step--pending"><div class="step__top"><span class="step__ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg></span><span class="step__label">Soạn câu trả lời</span></div><span class="step__time"></span></div>
+              </div>
+              <button class="steps-sum" style="align-self:flex-start"><span class="ok">✓</span><span class="mono">4 bước · 1,84 s · 3 nguồn</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+            </div>
+          </div>
+
+          <div>
+            <div class="ds-label">Bảng ứng viên (CandidateTable) · cột BM25, Dense, Rerank là HẠNG; đậm khi ≤ 5</div>
+            <div class="ctbl-wrap" style="max-height:none"><table class="ctbl" style="min-width:0">
+              <thead><tr><th scope="col"><button>#id</button></th><th scope="col"><button>CLB</button></th><th scope="col"><button>BM25</button></th><th scope="col"><button>Dense</button></th><th scope="col"><button>Rerank</button></th><th scope="col"><button>Trạng thái</button></th></tr></thead>
+              <tbody>
+                <tr class="is-selected"><td class="mono">#12</td><td><span class="badge club--pro">ProPTIT</span></td><td class="rk is-top">#1</td><td class="rk is-top">#2</td><td class="rk is-top">#1</td><td><span class="pill-sel">Trích dẫn</span></td></tr>
+                <tr><td class="mono">#13</td><td><span class="badge club--pro">ProPTIT</span></td><td class="rk is-top">#4</td><td class="rk is-top">#3</td><td class="rk is-top">#2</td><td><span class="pill-ctx">Đã chọn</span></td></tr>
+                <tr class="is-dim"><td class="mono">#77</td><td><span class="badge club--gcc">GCC</span></td><td class="rk">#14</td><td class="rk">—</td><td class="rk">#9</td><td><span class="pill-mid">Loại</span></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div>
+            <div class="ds-label">Thẻ lỗi (ErrorCard) · Banner</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div class="errcard"><span class="errcard__ico"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><div class="errcard__text">Hệ thống đang quá tải, thử lại sau ít giây.<div class="errcard__sub">Tự thử lại sau 7 giây.</div></div><button class="btn btn--outline btn--sm">Thử lại (7)</button></div>
+              <div class="banner" style="position:static;border-radius:8px"><span class="spinner"></span>Mất kết nối. Đang thử kết nối lại…</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ds-label">Khung không có thông tin (AbstainCard)</div>
+            <div class="abstain">
+              <div class="abstain__head"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8h.01M11 12h1v5h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>Tài liệu chưa có thông tin này</div>
+              <p>Tài liệu hiện có không đề cập đến “đợt tuyển năm 2025”.</p>
+              <div class="abstain__label">Thông tin gần nhất có thể hữu ích</div>
+              <div class="strip"><button class="src-mini club--pro"><span class="src-mini__head"><span class="num">1</span><span class="badge">ProPTIT</span><span class="src-id">#30</span></span><span class="src-mini__topic">Tuyển thành viên 2026</span><span class="src-mini__text">[Dữ liệu giả] Tài liệu chỉ có thông tin về đợt tuyển năm 2026.</span></button></div>
+              <div class="abstain__actions"><button class="btn btn--outline btn--sm">Hỏi lại theo cách khác</button><button class="btn btn--outline btn--sm">Xem các câu gợi ý</button></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ds-label">Ô nhập (Composer) · rỗng, đang gõ, đang gửi, lỗi</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="composer"><textarea class="composer__ta" rows="1" readonly placeholder="Nhập câu hỏi… (có thể gõ không dấu)" aria-label="Ô nhập mẫu rỗng"></textarea><div class="composer__row"><span style="flex:1"></span><button class="send" disabled="{{true}}" aria-label="Gửi"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></div>
+              <div class="composer"><textarea class="composer__ta" rows="1" readonly aria-label="Ô nhập mẫu đang gõ">clb dpt tuyen thanh vien thang may</textarea><div class="composer__row"><span style="flex:1"></span><button class="send" aria-label="Gửi"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></div>
+              <div class="composer is-sending"><textarea class="composer__ta" rows="1" readonly aria-label="Ô nhập mẫu đang gửi">CLB Lập Trình PTIT thành lập khi nào?</textarea><div class="composer__row"><span style="flex:1"></span><button class="btn btn--stop"><svg class="ic ic--fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>Dừng</button></div></div>
+              <div><div class="composer is-error"><textarea class="composer__ta" rows="1" readonly aria-label="Ô nhập mẫu lỗi">Câu hỏi quá dài…</textarea><div class="composer__row"><span class="composer__count mono is-over">512 / 500</span><span style="flex:1"></span><button class="send" disabled="{{true}}" aria-label="Gửi"><svg class="ic ic--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></div><p class="field-err">Câu hỏi tối đa 500 ký tự. Hãy rút gọn trước khi gửi.</p></div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ BÀN GIAO ============ -->
+  <section>
+    <h2 class="sec">5. Bàn giao cho React / Next.js + Tailwind</h2>
+    <p class="sub" style="margin-bottom:20px">Token ở mục 1–3 đi vào <span class="ds-tag">tailwind.config</span> dưới dạng CSS variable, bật dark mode bằng thuộc tính <span class="ds-tag">data-theme="dark"</span>.</p>
+    <div class="ds-grid2">
+      <div>
+        <div class="ds-label">tailwind.config.ts (rút gọn)</div>
+        <div class="ds-code">{{tailwindCode}}</div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-label">Tên component</div>
+        <table class="ds-table">
+          <thead><tr><th>React</th><th>Class gốc</th><th>Props chính</th></tr></thead>
+          <tbody>
+            <sc-for list="{{components}}" as="c" hint-placeholder-count="8"><tr><td class="ds-name">{{c.react}}</td><td class="ds-name" style="color:var(--text-2)">{{c.cls}}</td><td style="color:var(--text-2)">{{c.props}}</td></tr></sc-for>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ds-card" style="margin-top:24px">
+      <div class="ds-label">Hợp đồng dữ liệu → component</div>
+      <p style="font-size:13.5px;color:var(--text-2)">Trường <span class="ds-tag">answer</span> + <span class="ds-tag">citations[]</span> → <span class="ds-tag">AnswerBlock</span> và <span class="ds-tag">CiteMark</span> (số trích dẫn chỉ bấm được sau sự kiện <span class="ds-tag">done</span>); <span class="ds-tag">abstained</span> → <span class="ds-tag">AbstainCard</span> (lấy 2 citation đầu, cited=false); <span class="ds-tag">trace.stages[]</span> → <span class="ds-tag">StepProgress</span> và waterfall; <span class="ds-tag">trace.candidates[]</span> (20 dòng, hạng) → <span class="ds-tag">CandidateTable</span>; <span class="ds-tag">rewritten_query / expansions / clubs</span> → tab Truy vấn; <span class="ds-tag">llm_calls, llm_cache_hits, tokens, cost_usd, latency_ms</span> → thẻ số liệu (token và chi phí ghi “≈”). <span class="ds-tag">citations[].score</span> là điểm RRF nội bộ: không hiển thị như phần trăm hay độ tin cậy.</p>
+    </div>
+  </section>
+
+  <!-- ============ SSE ============ -->
+  <section>
+    <h2 class="sec">6. Sự kiện SSE → trạng thái giao diện</h2>
+    <p class="sub" style="margin-bottom:20px">Kết nối: <span class="ds-tag">POST /api/chat</span> trả <span class="ds-tag">text/event-stream</span>, đọc bằng <span class="ds-tag">fetch + ReadableStream</span> (không dùng EventSource). Mỗi câu hỏi độc lập, lịch sử chỉ lưu phía client.</p>
+    <div class="ds-card" style="overflow-x:auto">
+      <table class="ds-table">
+        <thead><tr><th>Sự kiện</th><th>Dữ liệu</th><th>Giao diện</th></tr></thead>
+        <tbody>
+          <sc-for list="{{sse}}" as="e" hint-placeholder-count="8"><tr><td class="ds-name">{{e.ev}}</td><td class="ds-name" style="color:var(--text-2)">{{e.data}}</td><td style="color:var(--text-2)">{{e.ui}}</td></tr></sc-for>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":5200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var T = function (name, tw, light, dark, use) { return { name: name, tw: tw, light: light, dark: dark, use: use }; };
+    var tokens = [
+      T('--bg', 'bg-app', '#F5F6F9', '#0B1019', 'Nền ứng dụng'),
+      T('--surface', 'bg-surface', '#FFFFFF', '#121927', 'Card, composer, panel'),
+      T('--surface-2', 'bg-surface-2', '#EEF1F6', '#192233', 'Hover, khối mã, nền phụ'),
+      T('--surface-3', 'bg-surface-3', '#E3E8F0', '#212C42', 'Bong bóng người dùng, tooltip nhẹ'),
+      T('--border', 'border-line', '#DDE2EB', '#263148', 'Viền mảnh'),
+      T('--border-strong', 'border-line-strong', '#C3CBD8', '#3A4864', 'Viền ô nhập, chip'),
+      T('--text', 'text-ink', '#101828', '#E7ECF5', 'Chữ chính'),
+      T('--text-2', 'text-ink-2', '#475467', '#AAB5C9', 'Chữ phụ'),
+      T('--text-3', 'text-ink-3', '#5B6678', '#8D99B0', 'Chú thích, nhãn nhỏ'),
+      T('--accent', 'bg-accent / text-accent', '#1D4ED8', '#6C9BFF', 'Màu nhấn chính: nút gửi, focus, tab'),
+      T('--accent-hover', 'bg-accent-hover', '#1E40AF', '#8DB0FF', 'Hover nút chính'),
+      T('--accent-soft', 'bg-accent-soft', '#E6EDFD', '#172447', 'Chip đang chọn, dòng được chọn'),
+      T('--pro-bg', 'club-pro-bg', '#E0F0FE', '#0F3550', 'ProPTIT · nền badge'),
+      T('--pro-fg', 'club-pro-fg', '#075985', '#8AD8FF', 'ProPTIT · chữ badge'),
+      T('--pro-solid', 'club-pro-solid', '#0369A1', '#7DD3FC', 'ProPTIT · chấm, số trích dẫn, viền chọn'),
+      T('--mm-bg', 'club-mm-bg', '#EFE8FD', '#2B1D52', 'Multimedia · nền badge'),
+      T('--mm-fg', 'club-mm-fg', '#5B21B6', '#CBBDFF', 'Multimedia · chữ badge'),
+      T('--mm-solid', 'club-mm-solid', '#7C3AED', '#B8A5FF', 'Multimedia · chấm, số trích dẫn'),
+      T('--gcc-bg', 'club-gcc-bg', '#FFEBD5', '#43240F', 'GCC · nền badge'),
+      T('--gcc-fg', 'club-gcc-fg', '#9A3412', '#FFC08A', 'GCC · chữ badge'),
+      T('--gcc-solid', 'club-gcc-solid', '#C2410C', '#FFA25C', 'GCC · chấm, số trích dẫn'),
+      T('--s2b-bg', 'club-s2b-bg', '#E5EAF1', '#243044', 'S2B chung · nền badge'),
+      T('--s2b-fg', 'club-s2b-fg', '#374A63', '#C0CDE0', 'S2B chung · chữ badge'),
+      T('--s2b-solid', 'club-s2b-solid', '#566579', '#94A8C4', 'S2B chung · chấm, số trích dẫn'),
+      T('--amber-bg', 'abstain-bg', '#FFF7E6', '#2A1E07', 'Khung “chưa có thông tin” (nền)'),
+      T('--amber-border', 'abstain-border', '#C77700', '#F2A33A', 'Viền nét đứt hổ phách'),
+      T('--amber-fg', 'abstain-fg', '#7A4300', '#FFD58A', 'Chữ trong khung hổ phách'),
+      T('--danger', 'danger', '#B42318', '#FF9C92', 'Lỗi, viền ô nhập lỗi, banner mất kết nối'),
+      T('--danger-bg', 'danger-bg', '#FEF0EE', '#321717', 'Thẻ lỗi'),
+      T('--success', 'success', '#067647', '#5EE29A', 'Bước xong ✓'),
+      T('--hl', 'highlight', '#FFF0B3', '#5E4B05', 'Tô vàng cụm khớp trong nguồn')
+    ];
+    var sp = [['s-1', 4], ['s-2', 8], ['s-3', 12], ['s-4', 16], ['s-5', 20], ['s-6', 24], ['s-8', 32], ['s-10', 40], ['s-12', 48]].map(function (x) { return { name: '--' + x[0], px: x[1] }; });
+    var contrast = [
+      ['Chữ chính / nền', 16.4, 16.1], ['Chữ phụ / card', 7.7, 8.5], ['Chú thích / nền', 5.4, 6.6], ['Chú thích / surface-2', 5.1, 5.6], ['Màu nhấn / card', 6.7, 6.5], ['Chữ nút chính / nền nút', 6.7, 7.0],
+      ['Badge ProPTIT', 6.5, 8.1], ['Badge Multimedia', 7.5, 8.8], ['Badge GCC', 6.3, 8.8], ['Badge S2B', 7.5, 8.3],
+      ['Số trích dẫn ProPTIT', 5.9, 11.4], ['Số trích dẫn Multimedia', 5.7, 8.9], ['Số trích dẫn GCC', 5.2, 9.6], ['Số trích dẫn S2B', 5.9, 7.9],
+      ['Khung hổ phách', 7.5, 11.8], ['Thẻ lỗi', 5.9, 8.2], ['Chữ trên nền tô vàng', 15.5, 7.1]
+    ].map(function (c) { return { pair: c[0], light: c[1].toFixed(1), dark: c[2].toFixed(1) }; });
+    var comps = [
+      ['<ChipFilter />', '.chip, .chipgroup', 'value, onChange, clubs'], ['<ClubBadge />', '.badge .club--*', 'club: pro | mm | gcc | s2b'],
+      ['<CiteMark />', '.cite .cite-tip', 'n, club, id, excerpt, onOpen'], ['<SourceCard variant="mini|full" />', '.src-mini, .src-card', 'citation, selected, highlights'],
+      ['<StepProgress />', '.steps .step--*', 'stages[], collapsed, onToggle'], ['<AnswerBlock />', '.answer .caret', 'segments[], streaming, clamp'],
+      ['<CompareTable />', '.tbl-wrap .tbl', 'columns[], rows[]'], ['<CandidateTable />', '.ctbl .sbar', 'candidates[], sortKey, sortDir'],
+      ['<ErrorCard />', '.errcard', 'kind: 429 | timeout, countdown, onRetry'], ['<AbstainCard />', '.abstain', 'topic, nearest[], onRephrase'],
+      ['<Composer />', '.composer', 'value, filter, status, maxLength'], ['<SourcePanel /> / <TechPanel />', '.panel, .tabs', 'open, tab, message']
+    ].map(function (c) { return { react: c[0], cls: c[1], props: c[2] }; });
+    var tw = "export default {\n  darkMode: ['selector', '[data-theme=\"dark\"]'],\n  theme: { extend: {\n    fontFamily: { ui: ['Be Vietnam Pro', 'system-ui'], mono: ['JetBrains Mono', 'monospace'] },\n    colors: {\n      app: 'var(--bg)', surface: { DEFAULT: 'var(--surface)', 2: 'var(--surface-2)', 3: 'var(--surface-3)' },\n      line: { DEFAULT: 'var(--border)', strong: 'var(--border-strong)' },\n      ink: { DEFAULT: 'var(--text)', 2: 'var(--text-2)', 3: 'var(--text-3)' },\n      accent: { DEFAULT: 'var(--accent)', hover: 'var(--accent-hover)', soft: 'var(--accent-soft)' },\n      club: {\n        pro: { bg: 'var(--pro-bg)', fg: 'var(--pro-fg)', solid: 'var(--pro-solid)' },\n        mm: { bg: 'var(--mm-bg)', fg: 'var(--mm-fg)', solid: 'var(--mm-solid)' },\n        gcc: { bg: 'var(--gcc-bg)', fg: 'var(--gcc-fg)', solid: 'var(--gcc-solid)' },\n        s2b: { bg: 'var(--s2b-bg)', fg: 'var(--s2b-fg)', solid: 'var(--s2b-solid)' },\n      },\n    },\n    borderRadius: { card: '12px', ctl: '8px', pill: '999px' },\n    spacing: { 1: '4px', 2: '8px', 3: '12px', 4: '16px', 5: '20px', 6: '24px', 8: '32px', 10: '40px', 12: '48px' },\n    transitionDuration: { DEFAULT: '160ms' },\n    transitionTimingFunction: { DEFAULT: 'cubic-bezier(.16,.84,.44,1)' },\n  } },\n}";
+    return { tokens: tokens, spacing: sp, contrast: contrast, components: comps, tailwindCode: tw, themes: [{ key: 'light', label: 'sáng' }, { key: 'dark', label: 'tối' }],
+    sse: [
+      ['stage', '{name, status: start|done, ms?}', 'Bước chuyển Chờ → Đang chạy → Xong (ms chỉ có khi done)'],
+      ['token', '{text}', 'Stream từng chữ + con trỏ. [n] hiện dạng chữ thường, chưa bấm được'],
+      ['incident', '{type, stage, attempt, wait_s}', 'type=retry: thẻ 429, đếm ngược theo wait_s, bước tương ứng đỏ'],
+      ['ping', '(không dữ liệu)', 'Không đổi giao diện; chỉ reset đồng hồ 90 giây'],
+      ['done', '{answer, abstained, citations, trace, latency_ms}', 'Thu gọn thanh bước; hiện dải nguồn; số trích dẫn thành bấm được; abstained=true thì thay văn bản bằng khung hổ phách'],
+      ['error', '{message}', 'Thẻ lỗi kèm nút Thử lại'],
+      ['(90 giây im lặng)', 'kể cả không có ping', 'Trạng thái “Câu trả lời mất quá nhiều thời gian”, huỷ fetch'],
+      ['(bấm Dừng)', 'client huỷ fetch', 'Giữ phần đã stream, nhãn “Đã dừng” (server vẫn chạy hết và ghi cache)']
+    ].map(function (e) { return { ev: e[0], data: e[1], ui: e[2] }; }) };
+  }
+}
+</script>
+</body>
+</html>

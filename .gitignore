@@ -47,6 +47,7 @@ web/build/
 web/.next/
 web/.env*
 web/*.log
+web/*.tsbuildinfo
 
 # Tệp làm việc và cấu hình của công cụ AI (không thuộc dự án)
 AGENTS.md

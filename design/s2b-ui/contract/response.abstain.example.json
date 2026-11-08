@@ -1,0 +1,53 @@
+{
+  "answer": "",
+  "abstained": true,
+  "citations": [
+    {"n":1,"id":30,"club":"ProPTIT","topic":"Tuyển thành viên 2026","text":"[Dữ liệu giả] Tài liệu chỉ có thông tin về đợt tuyển thành viên năm 2026, không có đợt tuyển các năm trước.","score":0.0134,"cited":false},
+    {"n":2,"id":47,"club":"Multimedia","topic":"Tuyển thành viên","text":"[Dữ liệu giả] Đợt tuyển của CLB Multimedia mở đơn vào tháng 9, theo thông báo của năm hiện tại.","score":0.0121,"cited":false}
+  ],
+  "retrieved_ids": [30,47],
+  "trace": {
+    "original_query": "Đợt tuyển thành viên năm 2025 của ProPTIT mở khi nào?",
+    "rewritten_query": "Thời điểm mở đợt tuyển thành viên 2025 của CLB",
+    "expansions": [],
+    "clubs": [],
+    "candidates": [
+      {"id":30,"club":"ProPTIT","topic":"Tuyển thành viên 2026","bm25":4,"dense":2,"rerank":1,"selected":true,"cited":false},
+      {"id":47,"club":"Multimedia","topic":"Tuyển thành viên","bm25":5,"dense":2,"rerank":2,"selected":true,"cited":false},
+      {"id":2,"club":"Multimedia","topic":"Quy trình","bm25":4,"dense":7,"rerank":3,"selected":true,"cited":false},
+      {"id":103,"club":"Multimedia","topic":"Lịch sử","bm25":8,"dense":3,"rerank":4,"selected":true,"cited":false},
+      {"id":28,"club":"Multimedia","topic":"Sản phẩm","bm25":8,"dense":7,"rerank":5,"selected":true,"cited":false},
+      {"id":33,"club":"GCC","topic":"Hoạt động","bm25":20,"dense":19,"rerank":6,"selected":false,"cited":false},
+      {"id":56,"club":"ProPTIT","topic":"Quy trình","bm25":10,"dense":14,"rerank":7,"selected":false,"cited":false},
+      {"id":34,"club":"ProPTIT","topic":"Sự kiện","bm25":14,"dense":9,"rerank":8,"selected":false,"cited":false},
+      {"id":59,"club":"ProPTIT","topic":"Ban chuyên môn","bm25":14,"dense":12,"rerank":9,"selected":false,"cited":false},
+      {"id":7,"club":"S2B","topic":"Giới thiệu","bm25":18,"dense":19,"rerank":10,"selected":false,"cited":false},
+      {"id":51,"club":"Multimedia","topic":"Sản phẩm","bm25":8,"dense":6,"rerank":11,"selected":false,"cited":false},
+      {"id":117,"club":"ProPTIT","topic":"Sự kiện","bm25":10,"dense":20,"rerank":12,"selected":false,"cited":false},
+      {"id":113,"club":"ProPTIT","topic":"Ban chuyên môn","bm25":10,"dense":7,"rerank":13,"selected":false,"cited":false},
+      {"id":110,"club":"GCC","topic":"Quy trình","bm25":11,"dense":10,"rerank":14,"selected":false,"cited":false},
+      {"id":32,"club":"ProPTIT","topic":"Lịch sử","bm25":null,"dense":null,"rerank":15,"selected":false,"cited":false},
+      {"id":64,"club":"S2B","topic":"Thông báo","bm25":10,"dense":null,"rerank":16,"selected":false,"cited":false},
+      {"id":13,"club":"ProPTIT","topic":"Liên hệ","bm25":11,"dense":6,"rerank":17,"selected":false,"cited":false},
+      {"id":37,"club":"Multimedia","topic":"Quy trình","bm25":12,"dense":13,"rerank":18,"selected":false,"cited":false},
+      {"id":17,"club":"Multimedia","topic":"Quy trình","bm25":13,"dense":null,"rerank":19,"selected":false,"cited":false},
+      {"id":9,"club":"ProPTIT","topic":"Hoạt động","bm25":null,"dense":null,"rerank":20,"selected":false,"cited":false}
+    ],
+    "stages": [
+      {"name":"rewrite","ms":610},
+      {"name":"retrieve","ms":40},
+      {"name":"rerank","ms":500},
+      {"name":"generate","ms":330}
+    ],
+    "llm_calls": 2,
+    "llm_cache_hits": 0,
+    "tokens": {
+      "in": 1620,
+      "out": 40,
+      "estimated": true
+    },
+    "cost_usd": 0.0016,
+    "incidents": []
+  },
+  "latency_ms": 1480
+}
