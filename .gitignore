@@ -8,9 +8,11 @@ data/*/gold.jsonl
 # Đề Private Test phát hành ngày 08/11; trước đó không commit (BTC dùng git add -f khi phát hành)
 # data/private_test/questions.jsonl
 
-# Output, cache
+# Output, cache, logs
 outputs/
 .cache/
+*.log
+logs/
 
 # Python
 __pycache__/
@@ -49,13 +51,26 @@ web/.env*
 web/*.log
 web/*.tsbuildinfo
 
-# Tệp làm việc và cấu hình của công cụ AI (không thuộc dự án)
+# Tệp làm việc, cấu hình và bộ nhớ của công cụ AI (không thuộc dự án)
 AGENTS.md
 agents.md
 GEMINI.md
+gemini.md
 CLAUDE.md
+claude.md
+MEMORY.md
+SESSION_NOTES.md
 .gemini/
 .agent/
 .agents/
+_agent/
+_agents/
 .antigravity/
 .agy/
+.cursor/
+.windsurf/
+.mcp.json
+mcp_config.json
+
+# Ghi chú bàn giao ngữ cảnh làm việc
+HANDOFF.md
