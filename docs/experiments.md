@@ -326,3 +326,22 @@ So với Public (baseline): Groundedness và Abstention đã cao ở cả hai t�
 - **Câu trả lời quá dài**: trung vị 428 ký tự, so với 196 ở đáp án chuẩn → ROUGE-L thấp (0.42). Hướng xử lý: prompt
   yêu cầu trả lời ngắn, chép nguyên số liệu/tên riêng.
 - Latency trung vị 3.7 s/câu (chạy tuần tự).
+
+### E11 (nhánh `perf/nhieu-y-day-du`, không merge): prompt v8 trên Private, KHÔNG TỐT HƠN bản chốt
+
+Ngày 08/11 luật cho phép sửa mã. Thử prompt v8 = v5 + quy tắc "nêu đủ số liệu của từng đối tượng" (câu so sánh, nhiều CLB, nhiều mốc). Chỉ nộp Private, không đo trên train (ngân sách).
+
+| Private (42 câu) | Bản chốt `62b84fd` (v5) | v8 |
+|---|---:|---:|
+| Retrieval | 96.78 | 96.87 |
+| String Presence | 86.97 | **89.10** |
+| ROUGE-L | 57.69 | 56.21 |
+| Groundedness | 95.30 | 94.02 |
+| Response Relevancy | 55.90 | 54.47 |
+| 1 - Noise Sensitivity | 88.89 | 86.54 |
+| Abstention | 100.00 | 100.00 |
+| **Raw** | **88.79** | 88.46 |
+
+- String Presence tăng +2.1 nhưng ROUGE-L, Groundedness, Relevancy, Noise đều giảm → câu trả lời đủ ý nhưng dài hơn.
+- Chênh lệch tổng (−0.33) nằm trong biên dao động của judge (±1). Kết luận: giữ v5, v8 chỉ lưu vết ở nhánh riêng.
+- Cảnh báo đỏ `private-0005` của `sanity_check` là báo động giả: Haiku trả `{"ranking": []}` (JSON hợp lệ, không đoạn nào liên quan vì corpus không có Gen 13 năm 2025), code coi danh sách rỗng là "JSON hỏng" và dùng thứ hạng RRF. Câu vẫn từ chối đúng.

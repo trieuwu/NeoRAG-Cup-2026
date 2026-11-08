@@ -184,17 +184,18 @@ def test_ambiguous_unaccented_words_are_not_expanded():
         assert word not in ABBREVIATIONS
 
 
-def test_rewrite_v3_has_disambiguation_and_advice_rules():
+def test_rewrite_v3_has_structure_and_linking_rules():
     from solution.query import REWRITE_PROMPTS
 
     v3 = REWRITE_PROMPTS["v3"]
-    assert "đứng lớp" in v3 and "nhắn" in v3 and "xin tư vấn" in v3 and "ICPC" in v3
+    # Bản chốt Private rút gọn quy tắc tư vấn/đứng lớp/ICPC (chủ ý tối ưu), thêm quy tắc liên kết mốc.
+    assert "sub_queries" in v3 and "clubs" in v3 and "BẮT BUỘC tách" in v3
 
 
-def test_v5_prompt_extends_v4(corpus):
-    from solution.prompts import ANSWER_SYSTEM_V4, ANSWER_SYSTEM_V5, answer_messages
+def test_v5_prompt_is_standalone_rewrite(corpus):
+    from solution.prompts import ANSWER_SYSTEM_V5, answer_messages
 
-    assert ANSWER_SYSTEM_V5.startswith(ANSWER_SYSTEM_V4.split("8.")[0])
+    # v5 là bản viết lại độc lập (bảo vệ Groundedness/Noise Sensitivity), không còn kế thừa v4.
     assert "KHÔNG hỏi" in ANSWER_SYSTEM_V5
     assert answer_messages("q", "q", corpus, "v5")[0]["content"] == ANSWER_SYSTEM_V5
 
