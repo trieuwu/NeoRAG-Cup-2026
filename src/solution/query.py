@@ -73,10 +73,11 @@ Chữ không dấu nhiều nghĩa: chọn nghĩa theo các từ xung quanh.
 
 Nhiệm vụ (KHÔNG trả lời câu hỏi):
 1. "query": viết lại câu hỏi thành tiếng Việt có dấu đầy đủ, rõ ràng, mở rộng mọi viết tắt. Giữ nguyên mọi ý được hỏi và vai trò của người hỏi, không thêm ý mới. Chỉ ghi tên CLB khi câu hỏi nhắc tới CLB đó.
-2. "clubs": khóa các CLB mà câu hỏi nhắc tới, chọn trong ["proptit", "multimedia", "gcc", "s2b"]. Câu hỏi về cấp Học viện (ICPC PTIT, Khoa, Phòng Giáo vụ, chuẩn đầu ra, đăng ký môn học, điểm rèn luyện...) mà không nhắc CLB nào thì để []. Không tự gắn CLB mà người hỏi không nhắc tới.
-3. "sub_queries": nếu câu hỏi gồm nhiều ý, tách thành các câu hỏi con có dấu, mỗi câu một ý (tối đa 3). Câu hỏi một ý thì để [].
-   - Chỉ khi người hỏi SO SÁNH rõ ràng giữa các CLB (vd. "CLB nào lâu đời nhất", "X với Y khác nhau thế nào"), viết MỘT câu hỏi con cho TỪNG CLB, ghi rõ tên CLB và thông tin cụ thể cần tìm (vd. "CLB Lập Trình PTIT được thành lập khi nào?").
-   - Câu hỏi mở, xin tư vấn (vd. "học ngành Đa phương tiện thì nên vào CLB nào") thì GIỮ NGUYÊN câu hỏi chung, KHÔNG tách theo từng CLB, sub_queries = [], và "clubs" chỉ ghi CLB phù hợp rõ ràng theo mô tả ở trên (nếu không rõ thì []).
+2. "clubs": khóa các CLB mà câu hỏi nhắc tới, chọn trong ["proptit", "multimedia", "gcc", "s2b"]. Câu hỏi về cấp Học viện mà không nhắc CLB nào thì để []. Không tự gắn CLB mà người hỏi không nhắc tới.
+3. "sub_queries": nếu câu hỏi gồm nhiều ý hoặc cần liên kết nhiều mốc thông tin, tách thành các câu hỏi con độc lập (tối đa 3):
+  - Câu hỏi so sánh giữa các CLB: viết MỘT câu hỏi con cho TỪNG CLB cụ thể.
+  - Câu hỏi liên kết 2 sự kiện/mốc thời gian/đối tượng (ví dụ: "đội thi giải X có ai làm chủ nhiệm không", "nhiệm kỳ mới nhất so với nhiệm kỳ trước", "sự kiện A đến sự kiện B cách nhau bao lâu"): BẮT BUỘC tách thành 2 câu hỏi con riêng biệt để tìm độc lập từng đối tượng (ví dụ câu 1: "Thành viên đội tuyển thi giải X gồm những ai?", câu 2: "Danh sách chủ nhiệm CLB qua các nhiệm kỳ?").
+  - Câu hỏi một ý đơn giản thì để [].
 
 Chỉ trả về một object JSON đúng dạng sau, không giải thích:
 {"query": "...", "clubs": ["..."], "sub_queries": ["..."]}"""
