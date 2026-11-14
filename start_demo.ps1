@@ -25,6 +25,19 @@ if (-not (Test-Path ".env")) {
     Fail "không thấy file .env (chứa key gateway). Sao chép từ .env.example và điền key trước khi chạy."
 }
 
+if (Test-Path "configs/private.env") {
+    Step "Nạp cấu hình bản chốt Private 88.79 (configs/private.env)"
+    foreach ($line in Get-Content "configs/private.env" -Encoding UTF8) {
+        $line = $line.Trim()
+        if (-not $line -or $line.StartsWith("#")) { continue }
+        $name, $value = $line.Split("=", 2)
+        if ($name -match "^RAG_") {
+            Set-Item -Path "env:$name" -Value $value
+            Write-Host "    $name=$value"
+        }
+    }
+}
+
 if (-not $SkipBuild) {
     Step "Build giao diện web (web/ -> web/dist/)"
     Push-Location "web"
