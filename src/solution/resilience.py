@@ -105,7 +105,13 @@ class ResilientLLM:
         return self._call("chat", lambda: self.inner.chat(messages, model=model, **kwargs))
 
     def embed(self, texts: list[str], model: str, **kwargs):
-        return self._call("embed", lambda: self.inner.embed(texts, model=model, **kwargs))
+        def _embed():
+            try:
+                return self.inner.embed(texts, model=model, **kwargs)
+            except TypeError:  # một số endpoint OpenAI-compatible trả index=None khi batch > 1
+                return self.inner.embed(texts, model=model, batch_size=1)
+
+        return self._call("embed", _embed)
 
 
 # ---------------------------------------------------------------- output luôn hợp lệ
