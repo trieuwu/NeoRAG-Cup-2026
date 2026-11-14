@@ -270,3 +270,15 @@ def test_ping_sent_while_waiting(corpus, monkeypatch):
     pipe.llm.inner.responder = lambda m: time.sleep(0.3) or _responder(m)
     body = _client(corpus, pipe).post("/api/chat", json={"message": "clb mm"}).text
     assert "event: ping" in body and body.rstrip().splitlines()[-2] == "event: done"
+
+
+def test_serves_static_web_dist_when_present(corpus, tmp_path):
+    from app.api import create_app
+    from fastapi.testclient import TestClient
+
+    (tmp_path / "index.html").write_text("<html><body>S2B Hỏi Đáp</body></html>", encoding="utf-8")
+    chat = TracedChat(_stream_pipeline(corpus))
+    client = TestClient(create_app(lambda: (chat, {d.id: d for d in corpus}), static_dir=tmp_path))
+    res = client.get("/")
+    assert res.status_code == 200 and "S2B Hỏi Đáp" in res.text
+    assert client.get("/api/health").json()["status"] == "ok"
