@@ -28,16 +28,20 @@ import queue
 import threading
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, StringConstraints
 
 from neorag.data import load_corpus
 from solution.pipeline import SolutionPipeline
 from solution.trace import TracedChat
+
+WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 SUGGESTIONS = [
     {"text": "clb lap trinh ptit thanh lap nam nao, phuong cham la gi", "tag": "không dấu"},
@@ -109,7 +113,7 @@ async def _events(chat: TracedChat, message: str, cite: bool) -> AsyncIterator[s
         cancel.set()
 
 
-def create_app(chat_factory=get_chat) -> FastAPI:
+def create_app(chat_factory=get_chat, static_dir: Path | None = WEB_DIST) -> FastAPI:
     app = FastAPI(title="NeoRAG S2B Chatbot API", version="1.0")
     origins = os.getenv("NEORAG_CORS_ORIGINS", "*").split(",")
     app.add_middleware(
@@ -148,6 +152,9 @@ def create_app(chat_factory=get_chat) -> FastAPI:
             "rerank": pipe.config.retrieval.use_rerank,
             "prompt": pipe.config.prompt,
         }
+
+    if static_dir is not None and static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="web")
 
     return app
 
