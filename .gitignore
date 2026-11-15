@@ -39,8 +39,9 @@ models_cache/
 # Công cụ cá nhân của người dùng (không thuộc dự án): bỏ qua toàn bộ
 .claude/
 
-# Ghi chú học tập cá nhân
+# Ghi chú học tập cá nhân & slide thuyết trình
 STUDY_REPORT.md
+slides.html
 
 # Frontend (web/)
 web/node_modules/
